@@ -83,16 +83,32 @@ check_symlink ".vscode/settings.json" ".priv-storage/.vscode/settings.json"
 section "4. .mcp.json"
 if [ -f "$ROOT/.mcp.json" ]; then pass ".mcp.json exists"; else fail ".mcp.json missing"; fi
 
-# ---------- 5. .gitignore AIPS block ----------
-section "5. .gitignore"
-if [ -f "$ROOT/.gitignore" ]; then
-  if grep -qE '\.priv-storage/?' "$ROOT/.gitignore" && grep -qE 'tmp-igbkp/?' "$ROOT/.gitignore"; then
-    pass ".gitignore contains AIPS block (.priv-storage, tmp-igbkp)"
-  else
-    fail ".gitignore missing AIPS entries"
-  fi
+# ---------- 5. AIPS ignore coverage (global ~/.config/git/ignore) ----------
+section "5. ignore coverage"
+GLOBAL_GI="$(git config --global core.excludesfile 2>/dev/null || true)"
+case "$GLOBAL_GI" in
+  "~/"*) GLOBAL_GI="$HOME/${GLOBAL_GI#~/}" ;;
+esac
+[ -z "$GLOBAL_GI" ] && GLOBAL_GI="$HOME/.config/git/ignore"
+
+if [ -f "$GLOBAL_GI" ] \
+     && grep -qE '\.priv-storage/?' "$GLOBAL_GI" \
+     && grep -qE 'tmp-igbkp/?' "$GLOBAL_GI"; then
+  pass "global $GLOBAL_GI covers .priv-storage + tmp-igbkp"
 else
-  fail ".gitignore missing"
+  warn "global $GLOBAL_GI missing AIPS entries — run: bash \$AIPS_ROOT/lib/setup-global-gitignore.sh"
+fi
+
+# Per-project .gitignore: should NOT carry AIPS lines (v7+ globalized them).
+# A leftover marker block or raw line is only a warning — /aips:init strips it.
+if [ -f "$ROOT/.gitignore" ]; then
+  if grep -qE '^# === AIPS v[0-9]+\.[0-9]+' "$ROOT/.gitignore" 2>/dev/null \
+       || grep -qFx '.priv-storage/' "$ROOT/.gitignore" 2>/dev/null \
+       || grep -qFx 'tmp-igbkp/' "$ROOT/.gitignore" 2>/dev/null; then
+    warn "per-project .gitignore still has AIPS lines (v6.x leftover) — run /aips:init to strip"
+  else
+    pass "per-project .gitignore is clean of AIPS lines"
+  fi
 fi
 
 # ---------- 6. tmp-igbkp toolkit (9 scripts, NO codex-relay-*) ----------
