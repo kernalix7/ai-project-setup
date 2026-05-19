@@ -122,3 +122,31 @@ done
 
 echo
 ok "Globalized ${linked}/${#SCRIPTS[@]} toolkit scripts to ${BIN_DIR}/aips-*"
+
+# Also link the statusline to a stable path so per-project settings.json can
+# reference $HOME/.local/bin/aips-statusline (version-independent) instead of
+# the version-pinned plugin cache path.
+PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+STATUSLINE_SRC="$PLUGIN_ROOT/statusline"
+STATUSLINE_TARGET="${BIN_DIR}/aips-statusline"
+if [ -f "$STATUSLINE_SRC" ]; then
+  if [ -L "$STATUSLINE_TARGET" ]; then
+    cur="$(readlink -f "$STATUSLINE_TARGET" 2>/dev/null || readlink "$STATUSLINE_TARGET")"
+    if [ "$cur" = "$STATUSLINE_SRC" ] || [ "$cur" = "$(readlink -f "$STATUSLINE_SRC" 2>/dev/null)" ]; then
+      ok "aips-statusline -> ${STATUSLINE_SRC} (already current)"
+    else
+      run "mv \"$STATUSLINE_TARGET\" \"${STATUSLINE_TARGET}.bak.${TS}\""
+      run "ln -s \"$STATUSLINE_SRC\" \"$STATUSLINE_TARGET\""
+      ok "aips-statusline -> ${STATUSLINE_SRC}"
+    fi
+  elif [ -e "$STATUSLINE_TARGET" ]; then
+    run "mv \"$STATUSLINE_TARGET\" \"${STATUSLINE_TARGET}.bak.${TS}\""
+    run "ln -s \"$STATUSLINE_SRC\" \"$STATUSLINE_TARGET\""
+    ok "aips-statusline -> ${STATUSLINE_SRC}"
+  else
+    run "ln -s \"$STATUSLINE_SRC\" \"$STATUSLINE_TARGET\""
+    ok "aips-statusline -> ${STATUSLINE_SRC}"
+  fi
+else
+  warn "statusline source not found at $STATUSLINE_SRC — skipping aips-statusline symlink"
+fi

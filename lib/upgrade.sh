@@ -264,7 +264,7 @@ print_plan() {
   printf '[plan] cleanup   REMOVE %d v5 files + %d dirs (idempotent)\n' \
     "${#REMOVE_FILES[@]}" "${#REMOVE_DIRS[@]}"
   printf '[plan] CLAUDE.md trim Sections 8/9/10/12/13\n'
-  printf '[plan] settings  strip .hooks + .statusLine from .priv-storage/.claude/settings.json\n'
+  printf '[plan] settings  reconstruct .priv-storage/.claude/settings.json (drop .hooks, set statusLine → ~/.local/bin/aips-statusline)\n'
 
   if [ "$ONLY_CLEANUP" -eq 1 ]; then
     printf '[plan] mode      --only-cleanup: skipping globalize + mirror + strict purge\n'
@@ -353,31 +353,24 @@ for d in "${REMOVE_DIRS[@]}"; do
 done
 log "cleanup    removed $N_REMOVED v5.x artifacts"
 
-# strip stale hook refs from .priv-storage/.claude/settings.json
+# Reconstruct settings.json: keep user-tunable keys (model, outputStyle, env,
+# etc.), drop .hooks (plugin's hooks.json owns it), set statusLine to the
+# stable global symlink (~/.local/bin/aips-statusline) or the plugin path.
 SETTINGS_JSON="$PRIV/.claude/settings.json"
-if [ -f "$SETTINGS_JSON" ]; then
-  if [ "$DRY_RUN" -eq 0 ]; then
+RENDER_SCRIPT="$LIB_DIR/render-settings-json.sh"
+if [ "$DRY_RUN" -eq 0 ]; then
+  if [ -f "$SETTINGS_JSON" ]; then
     cp "$SETTINGS_JSON" "$SETTINGS_JSON.v5.bak"
-    if command -v jq >/dev/null 2>&1; then
-      if jq 'del(.hooks) | del(.statusLine)' "$SETTINGS_JSON" > "$SETTINGS_JSON.tmp" 2>/dev/null; then
-        mv "$SETTINGS_JSON.tmp" "$SETTINGS_JSON"
-        ok "stripped .hooks + .statusLine from $SETTINGS_JSON (backup: settings.json.v5.bak)"
-      else
-        rm -f "$SETTINGS_JSON.tmp"
-        warn "jq del failed on $SETTINGS_JSON — left intact"
-      fi
-    else
-      # sed fallback: best-effort top-level "hooks": { ... } and "statusLine": ...
-      tmp="$(mktemp)"
-      sed -e '/"hooks"[[:space:]]*:[[:space:]]*{/,/^[[:space:]]*}[[:space:]]*,\?$/d' \
-          -e '/"statusLine"[[:space:]]*:/d' \
-          "$SETTINGS_JSON" > "$tmp" && mv "$tmp" "$SETTINGS_JSON" \
-        && ok "stripped .hooks + .statusLine via sed fallback (backup: settings.json.v5.bak)" \
-        || warn "sed fallback failed for $SETTINGS_JSON"
-    fi
-  else
-    printf '  [dry-run] jq del(.hooks) del(.statusLine) %s\n' "$SETTINGS_JSON"
   fi
+  if [ -x "$RENDER_SCRIPT" ] || [ -f "$RENDER_SCRIPT" ]; then
+    bash "$RENDER_SCRIPT" "$PROJECT_ROOT" \
+      && ok "reconstructed $SETTINGS_JSON via render-settings-json.sh" \
+      || warn "render-settings-json.sh exited non-zero"
+  else
+    warn "render-settings-json.sh not found at $RENDER_SCRIPT — settings.json left as-is"
+  fi
+else
+  printf '  [dry-run] bash %s "%s"\n' "$RENDER_SCRIPT" "$PROJECT_ROOT"
 fi
 
 # CLAUDE.md trim — Sections 8/9/10/12/13
