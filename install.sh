@@ -66,17 +66,25 @@ CUR_STEP=0
 next_step() { CUR_STEP=$((CUR_STEP+1)); step "$CUR_STEP" "$TOTAL_STEPS" "$1"; }
 
 # ---------- banner ----------
-cat <<BANNER
+printf "\n%s%s╔════════════════════════════════════════════════════════════════╗%s\n" "$C_BOLD" "$C_CYAN" "$C_RESET"
+printf "%s%s║  AIPS v7.0 installer — Claude Code plugin distribution         ║%s\n" "$C_BOLD" "$C_CYAN" "$C_RESET"
+printf "%s%s║  Repo: https://github.com/kernalix7/AIPS                       ║%s\n" "$C_BOLD" "$C_CYAN" "$C_RESET"
+printf "%s%s║  License: MIT                                                  ║%s\n" "$C_BOLD" "$C_CYAN" "$C_RESET"
+printf "%s%s╚════════════════════════════════════════════════════════════════╝%s\n\n" "$C_BOLD" "$C_CYAN" "$C_RESET"
 
-${C_BOLD}${C_CYAN}╔════════════════════════════════════════════════════════════════╗
-║  AIPS v7.0 installer — Claude Code plugin distribution         ║
-║  Repo: https://github.com/kernalix7/AIPS                       ║
-║  License: MIT                                                  ║
-╚════════════════════════════════════════════════════════════════╝${C_RESET}
+printf "Selected dependencies: %s%s%s\n" "$C_GREEN" "$WITH_DEPS" "$C_RESET"
+[ "$DRY_RUN" = "1" ] && printf "Mode: %sDRY RUN%s (no changes will be made)\n" "$C_YELLOW" "$C_RESET"
 
-Selected dependencies: ${C_GREEN}${WITH_DEPS}${C_RESET}
-[ "$DRY_RUN" = "1" ] && echo "Mode: ${C_YELLOW}DRY RUN${C_RESET} (no changes will be made)"
-BANNER
+# Detect pipe vs TTY (curl | bash leaves stdin = pipe)
+PIPED_INPUT=0
+if [ ! -t 0 ]; then
+  PIPED_INPUT=1
+  if [ -r /dev/tty ]; then
+    detail "stdin is piped — interactive prompts will read from /dev/tty"
+  else
+    warn "stdin is piped and /dev/tty unavailable — interactive prompts will fail. Consider downloading install.sh and running locally."
+  fi
+fi
 
 # ---------- Step 1: pre-flight ----------
 next_step "Pre-flight checks"
@@ -119,36 +127,100 @@ case "$UNAME" in
 esac
 
 # ---------- helpers ----------
+# claude_cmd: run a /command via claude --print with a hard timeout and
+# stdin from /dev/null so we never wait for confirmation prompts that
+# don't render under --print. Returns claude's exit code; caller can
+# inspect captured stdout.
 claude_cmd() {
   if [ "$DRY_RUN" = "1" ]; then printf "  %s[dry-run]%s claude --print %q\n" "$C_DIM" "$C_RESET" "$1"; return 0; fi
-  claude --print "$1" 2>&1 || return $?
+  local timeout_secs="${CLAUDE_CMD_TIMEOUT:-120}"
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "${timeout_secs}s" claude --print "$1" </dev/null 2>&1
+  else
+    claude --print "$1" </dev/null 2>&1
+  fi
 }
 
+# Plugin cache path for a given spec "name@marketplace".
+plugin_cache_dir() {
+  local spec="$1"
+  local name="${spec%@*}"
+  local market="${spec##*@}"
+  printf "%s/.claude/plugins/cache/%s/%s" "$HOME" "$market" "$name"
+}
+
+# Marketplace registration: try via claude --print first, fall back to
+# verifying ~/.claude/plugins/known_marketplaces.json directly so a hung
+# or silent claude run still moves the script forward.
 marketplace_add() {
   local src="$1" label="$2"
   detail "marketplace source: $src"
-  if claude_cmd "/plugin marketplace add $src" | grep -qiE "already (added|registered)|exists"; then
+  if [ "$DRY_RUN" = "1" ]; then
+    claude_cmd "/plugin marketplace add $src" >/dev/null
+    ok "marketplace added: $label (dry-run)"
+    return 0
+  fi
+  local out rc=0
+  out="$(claude_cmd "/plugin marketplace add $src")" || rc=$?
+  if printf "%s" "$out" | grep -qiE "already (added|registered)|exists"; then
     ok "marketplace already registered: $label"
+    return 0
+  fi
+  # Verify via the registry file the user already had on disk.
+  if [ -f "$HOME/.claude/plugins/known_marketplaces.json" ] \
+       && grep -qiF "$src" "$HOME/.claude/plugins/known_marketplaces.json" 2>/dev/null; then
+    ok "marketplace registered: $label"
+    return 0
+  fi
+  if [ "$rc" -eq 124 ]; then
+    warn "claude marketplace add timed out after ${CLAUDE_CMD_TIMEOUT:-120}s — assuming registered (manual re-run safe)"
   else
-    ok "marketplace added: $label"
+    warn "claude marketplace add returned $rc — proceeding (manual /plugin marketplace add $src may be needed)"
   fi
 }
 
+# Plugin install: try claude --print, then verify the cache directory
+# exists. If verification fails after a non-zero claude exit, fall back
+# to running plugin install in a foreground TTY context (best-effort)
+# and surface a clear manual instruction.
 plugin_install() {
   local spec="$1" label="$2"
   detail "plugin spec: $spec"
-  local out; out="$(claude_cmd "/plugin install $spec" || true)"
+  local cache_dir
+  cache_dir="$(plugin_cache_dir "$spec")"
+  if [ "$DRY_RUN" = "1" ]; then
+    claude_cmd "/plugin install $spec" >/dev/null
+    ok "$label installed (dry-run)"
+    return 0
+  fi
+  local out rc=0
+  out="$(claude_cmd "/plugin install $spec")" || rc=$?
   if printf "%s" "$out" | grep -qiE "already installed"; then
     if [ "$NO_PLUGIN_UPDATE" = "1" ]; then
       warn "$label already installed — skipping update (--no-plugin-update)"
-    else
-      detail "already installed — running /plugin update $spec"
-      claude_cmd "/plugin update $spec" >/dev/null || warn "$label update returned non-zero (continuing)"
-      ok "$label updated"
+      return 0
     fi
-  else
-    ok "$label installed"
+    detail "already installed — running /plugin update $spec"
+    claude_cmd "/plugin update $spec" >/dev/null 2>&1 || warn "$label update returned non-zero (continuing)"
+    ok "$label updated"
+    return 0
   fi
+  # Verify cache dir to confirm install actually happened.
+  if [ -d "$cache_dir" ] && [ -n "$(ls -A "$cache_dir" 2>/dev/null)" ]; then
+    ok "$label installed (verified at $cache_dir)"
+    return 0
+  fi
+  if [ "$rc" -eq 124 ]; then
+    warn "$label install timed out after ${CLAUDE_CMD_TIMEOUT:-120}s and cache dir is empty"
+  elif [ "$rc" -ne 0 ]; then
+    warn "$label install exit=$rc and cache dir is empty"
+  else
+    warn "$label install returned 0 but cache dir is empty — possible interactive prompt under --print"
+  fi
+  echo "    Manual fallback: open a new claude session and run:"
+  echo "        /plugin install $spec"
+  echo "    Then re-run this installer to pick up where it left off."
+  return 1
 }
 
 # ---------- Step 2: AIPS plugin ----------
