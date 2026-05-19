@@ -299,53 +299,58 @@ plugin_cv_line() {
 plugin_am_line() {
     local plugin_dir="$HOME/.claude/plugins/cache/agentmemory"
     [[ -d "$plugin_dir" ]] || return 0
-    local resp saved=0 saves=0
-    resp=$(curl -sfm 1 http://127.0.0.1:3111/api/stats 2>/dev/null || echo "")
+    # Try several known/likely endpoints. agentmemory's REST surface has
+    # changed across versions; we accept the first non-empty JSON response.
+    local resp saved=0 saves=0 ep
+    for ep in /api/stats /stats /api/v1/stats /api/memory/stats /v1/stats; do
+        resp=$(curl -sfm 1 "http://127.0.0.1:3111$ep" 2>/dev/null || echo "")
+        [[ -n "$resp" ]] && break
+    done
     if [[ -n "$resp" ]] && command -v jq >/dev/null 2>&1; then
-        saves=$(echo "$resp" | jq -r '.total_saves // 0' 2>/dev/null || echo 0)
-        saved=$(echo "$resp" | jq -r '.compression_ratio_pct // 0' 2>/dev/null || echo 0)
+        saves=$(echo "$resp" | jq -r '.total_saves // .saves // .observations_count // .count // 0' 2>/dev/null || echo 0)
+        saved=$(echo "$resp" | jq -r '.compression_ratio_pct // .savings_pct // .ratio // 0' 2>/dev/null || echo 0)
         saved=$(echo "$saved" | awk '{printf "%d", $1+0}')
         saves=$(echo "$saves" | awk '{printf "%d", $1+0}')
         printf '%d|🧠am:%d%%/%d' "$saved" "$saved" "$saves"
     else
-        printf '0|🧠am:?%%/?'
+        # Plugin is installed and service is reachable on 3111, but the REST
+        # surface isn't exposing stats we can read — show "on" so users know
+        # the layer is alive without faking a savings number.
+        if curl -sfm 1 -o /dev/null -w '%{http_code}' http://127.0.0.1:3113 2>/dev/null | grep -q '^2'; then
+            printf '0|🧠am:on'
+        else
+            printf '0|🧠am:?'
+        fi
     fi
 }
 
 plugin_rtk_line() {
     command -v rtk >/dev/null 2>&1 || return 0
+    # rtk gain -f json → .summary.avg_savings_pct (rtk 0.40+).
+    # Legacy fallback: parse text output for "(NN.N%)".
     local resp saved=0
-    resp=$(rtk gain --json 2>/dev/null || echo "")
+    resp=$(rtk gain -f json 2>/dev/null || echo "")
     if [[ -n "$resp" ]] && command -v jq >/dev/null 2>&1; then
-        saved=$(echo "$resp" | jq -r '.savings_pct // 0' 2>/dev/null || echo 0)
+        saved=$(echo "$resp" | jq -r '.summary.avg_savings_pct // .summary.savings_pct // .savings_pct // 0' 2>/dev/null || echo 0)
         saved=$(echo "$saved" | awk '{printf "%d", $1+0}')
-        printf '%d|💰rtk:%d%%' "$saved" "$saved"
     else
-        printf '0|💰rtk:0%%'
+        # Text fallback: pull the "(NN.N%)" next to "Tokens saved:".
+        saved=$(rtk gain 2>/dev/null | awk '/Tokens saved/{ for(i=1;i<=NF;i++){ if($i~/^\([0-9]+\.[0-9]+%\)$/){ gsub(/[()%]/,"",$i); printf "%d",$i+0; exit } } }')
+        [[ -z "$saved" ]] && saved=0
     fi
+    printf '%d|💰rtk:%d%%' "$saved" "$saved"
 }
 
 plugin_cdx_line() {
     local plugin_dir="$HOME/.claude/plugins/cache/openai-codex"
-    local log="$HOME/.claude/plugins/cache/openai-codex/codex/run-log.tsv"
     [[ -d "$plugin_dir" ]] || return 0
-    if [[ ! -f "$log" ]]; then
-        printf '0|🤖cdx:off'
-        return 0
+    # codex-plugin-cc doesn't expose a session run log we can read. Surface
+    # plugin liveness instead: codex CLI on PATH means /codex:* is usable.
+    if command -v codex >/dev/null 2>&1; then
+        printf '0|🤖cdx:ready'
+    else
+        printf '0|🤖cdx:no-cli'
     fi
-    local runs
-    runs=$(grep -cv '^#' "$log" 2>/dev/null || echo 0)
-    runs=$(echo "$runs" | awk '{printf "%d", $1+0}')
-    if [[ "$runs" -eq 0 ]]; then
-        printf '0|🤖cdx:off'
-        return 0
-    fi
-    # static estimate: min(95, runs * 5000 / max(USED,1) * 100)
-    local total="${USED:-1}"
-    [[ "$total" -lt 1 ]] && total=1
-    local saved
-    saved=$(awk -v r="$runs" -v t="$total" 'BEGIN{v=r*5000/t*100; if(v>95)v=95; if(v<0)v=0; printf "%d", v}')
-    printf '%d|🤖cdx:%d%%/%druns' "$saved" "$saved" "$runs"
 }
 
 cumulative_sigma() {
