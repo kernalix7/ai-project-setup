@@ -229,21 +229,92 @@ See [`MIGRATION-FROM-MD.md`](./MIGRATION-FROM-MD.md) for the user walkthrough.
 
 ---
 
-## 13. Roadmap
+## 13. v7.0 Hybrid Global-First Architecture
+
+v6.0 ships every toolkit script, session log, memory file, and gitignore block **per-project**. That guarantees portability but at three costs: disk duplication across N projects, manual sync whenever a toolkit script is patched, and no cross-machine resume for session state. v7.0 keeps the per-project guarantees that matter (multi-tool rule files, team-shared work status, project-specific MCP servers) and **selectively globalizes** the parts that are safe to share.
+
+The criterion for globalizing an artifact: (1) it does not break multi-tool parity (Codex / Cursor / Copilot must still read project-local rule files), (2) it carries no per-project privacy risk, and (3) it is not part of the team-shared git surface. Anything failing any of those three remains per-project. v7.0 is therefore **additive** — v6.0 layouts continue to work unchanged, and the migration is opt-in.
+
+### 13.1 The 4 globalizations + 5 preserved-per-project
+
+| Item | v6.0 | v7.0 | Rationale |
+|---|---|---|---|
+| `tmp-igbkp/` scripts | per-project | `~/.local/bin/aips-*` | Disk dedup, update propagation |
+| `sessions/` logs | per-project | `~/.claude/sessions/{path-hash}/` mirror (local fast-write buffer kept) | Cross-machine resume |
+| `memory/` files | per-project + dual-write | global only (`~/.claude/projects/{path-encoded}/memory/`) | Dual-write verified; local copy redundant |
+| `.gitignore` AIPS block | per-project | `~/.config/git/ignore` | Single source; all repos inherit |
+| **Preserved per-project** | | | |
+| `CLAUDE.md` Sections 1-7 + 11 | per-project | per-project | Multi-tool guarantee (Codex / Cursor / Copilot read project files) |
+| `WORK_STATUS.md` | per-project | per-project | Team-shared in repo |
+| `.mcp.json` | per-project | per-project | Project-specific MCP servers |
+| `tech-lead.md` + team agents | per-project | per-project | Project-customized team table |
+| `tmp-igbkp/` backup output | per-project | per-project | Encrypted snapshots scoped to repo |
+
+### 13.2 Path-hash convention
+
+Two distinct encodings are used to address per-project state in global directories:
+
+- `path-hash` = `md5sum <(echo "$PROJECT_ROOT")` first 12 chars — used in `~/.claude/sessions/{path-hash}/`.
+- `path-encoded` = `$PROJECT_ROOT` with `/` → `-` — used in `~/.claude/projects/{path-encoded}/memory/`.
+
+If a project is moved or renamed, its global state becomes orphaned (the path no longer hashes to the same value). The fix is `/aips:rebind <old-path>`, which re-points the orphaned global directories to the current `$PROJECT_ROOT`.
+
+### 13.3 `lib/` scripts (v7.0) — 6 new + 1 modified
+
+- `lib/globalize-toolkit.sh` — symlinks toolkit scripts into `~/.local/bin/aips-*`.
+- `lib/setup-global-gitignore.sh` — installs the AIPS block into `~/.config/git/ignore`.
+- `lib/backup-global-memory.sh` — extends `archive.sh` to cover global memory directories.
+- `lib/upgrade-to-v7.sh` — v6.0 → v7.0 migration with backup + rollback.
+- `lib/rebind.sh` — re-points orphaned global state after project move/rename.
+- `lib/scope.sh` — diagnostic that prints a 4-column table (item · location · scope · status).
+- `lib/verify-init.sh` *(modified)* — adds Section 10 v7.0 dual-write health checks.
+
+### 13.4 New slash commands
+
+| Command | Purpose |
+|---|---|
+| `/aips:upgrade --to v7.0` | Extends existing `/aips:upgrade` to perform the v6.0 → v7.0 migration |
+| `/aips:rebind <old-path>` | Re-bind orphaned global state to current `$PROJECT_ROOT` after move/rename |
+| `/aips:scope` | Diagnostic — print the 4-column scope table for the current project |
+
+### 13.5 Hook changes
+
+- `PostToolUse` / `PreCompact` / `Stop` / `SessionStart` now write to `~/.claude/sessions/{path-hash}/` **in parallel with** the local `.priv-storage/sessions/` buffer.
+- Mirror writes are `flock`-guarded to prevent collision when two projects hash to the same `path-hash` value.
+- `SessionStart` prefers the global mirror over the local copy on resume, falling back to local if the global directory is missing or stale.
+
+### 13.6 Mitigations baked in
+
+- **Project move/rename** → `/aips:rebind <old-path>` re-points orphaned global state.
+- **Global memory backup** → `archive.sh` covers `~/.claude/projects/{path-encoded}/memory/`.
+- **Per-project gitignore overrides** → use `!pattern` to unignore an entry from the global block.
+- **Cross-project hook contamination** → hooks lock strict `PROJECT_ROOT` before any global write.
+- **Privacy** → per-project `BLOCKLIST` honored; `agentmemory` MCP can be stopped per project.
+
+### 13.7 Compatibility
+
+- **Non-breaking** — v6.0 setups continue working with no changes required.
+- v7.0 migration is **opt-in** via `/aips:upgrade --to v7.0`.
+- The v6.0 → v7.0 migration takes ~10-30 sec including backup.
+- **Rollback** — restore from `tmp-igbkp/upgrade-v7-backup-{ts}/`.
+
+---
+
+## 14. Roadmap
 
 **v6.1** (planned):
 - Codex / Cursor parity surfacing — generate equivalent slash-commands as plain markdown so non-Claude tools get the same UX.
 - `/aips:doctor` — deeper diagnostics (hook log analysis, memory token usage).
 - Windows native (PowerShell) port of `lib/*.sh`.
 
-**v7.0** (speculative):
+**v7.x** (post-hybrid):
 - Move template rendering into a small native binary (eliminate `sed`/`awk` portability quirks).
 - Marketplace listing on the official Claude Code public registry.
 - Multi-language project templates (currently English; Korean exists in `docs/ko/`).
 
 ---
 
-## 14. References
+## 15. References
 
 - Project conventions: [`.priv-storage/CLAUDE.md`](../.priv-storage/CLAUDE.md)
 - User-facing README: [`README.md`](../README.md)

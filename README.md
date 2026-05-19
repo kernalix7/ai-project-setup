@@ -14,12 +14,12 @@ cd my-project && claude
 > /aips:init
 </code></pre>
 
-[![Status](https://img.shields.io/badge/status-v6.0%20in%20development-FF8C00?style=for-the-badge)](.priv-storage/v6.0-PLAN.md)
-[![Latest](https://img.shields.io/badge/latest-v6.0--dev-2962FF?style=for-the-badge)](.priv-storage/v6.0-PLAN.md)
+[![Status](https://img.shields.io/badge/status-v7.0%20in%20development-FF8C00?style=for-the-badge)](.priv-storage/v6.0-PLAN.md)
+[![Latest](https://img.shields.io/badge/latest-v7.0--dev-2962FF?style=for-the-badge)](.priv-storage/v6.0-PLAN.md)
 
 [![license](https://img.shields.io/github/license/kernalix7/AIPS?style=flat-square&color=blue)](LICENSE)
 [![plugin](https://img.shields.io/badge/Claude%20Code-plugin-7C3AED?style=flat-square&logo=anthropic&logoColor=white)](https://claude.com/claude-code)
-[![commands](https://img.shields.io/badge/slash%20commands-9-2EA44F?style=flat-square)](#slash-commands)
+[![commands](https://img.shields.io/badge/slash%20commands-12-2EA44F?style=flat-square)](#slash-commands)
 [![deps](https://img.shields.io/badge/plugin%20deps-4-blue?style=flat-square)](#what-gets-installed)
 [![stars](https://img.shields.io/github/stars/kernalix7/AIPS?style=flat-square&color=FFD93D&logo=github&logoColor=white)](https://github.com/kernalix7/AIPS/stargazers)
 [![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
@@ -41,13 +41,15 @@ cd my-project && claude
 
 ---
 
-### Status: v6.0 in development
+### Status: v7.0 in development
 
 > **v5.2 (stable)** is the single-file bootstrap model (`AI_PROJECT_SETUP.md`, ~7,600 lines). You download it and tell the AI "read and execute this." v5.x users can keep using [`AI_PROJECT_SETUP.md`](AI_PROJECT_SETUP.md).
 >
-> **v6.0 (in development)** redistributes the same artifact as a **Claude Code plugin marketplace**. One `install.sh` per machine registers the marketplace in `~/.claude/` and installs/updates 4 dependency plugins; each project runs `/aips:init` once and **auto-branches** between fresh / v5.x migrate / re-init / repair. The 7,600-line markdown the AI used to parse every time is replaced by a deterministic install script + idempotent slash commands.
+> **v6.0** redistributes the same artifact as a **Claude Code plugin marketplace**. One `install.sh` per machine registers the marketplace in `~/.claude/` and installs/updates 4 dependency plugins; each project runs `/aips:init` once and **auto-branches** between fresh / v5.x migrate / re-init / repair. The 7,600-line markdown the AI used to parse every time is replaced by a deterministic install script + idempotent slash commands. v6.0 setups remain a fully valid baseline.
 >
-> This document describes **v6.0**. If you need v5.2, see the [v5.2 archive](AI_PROJECT_SETUP.md) or the [Korean README](docs/README.ko.md) v5.2 section.
+> **v7.0 (in development)** layers a **hybrid global-first** model on top of v6.0 — toolkit scripts, sessions mirror, memory, and the AIPS gitignore block move into `~/.claude/` / `~/.local/bin/` / `~/.config/git/ignore`, while CLAUDE.md, WORK_STATUS.md, `.mcp.json`, agent files, and `tmp-igbkp/` backup outputs stay per-project. v7.0 is **non-breaking**: existing v6.0 projects keep working untouched, and migration is opt-in via `/aips:upgrade --to v7.0`.
+>
+> This document describes **v7.0** with v6.0 baseline notes. If you need v5.2, see the [v5.2 archive](AI_PROJECT_SETUP.md) or the [Korean README](docs/README.ko.md) v5.2 section.
 
 ---
 
@@ -60,6 +62,7 @@ cd my-project && claude
 - [Statusline](#statusline)
 - [Slash commands](#slash-commands)
 - [Migration from v5.x](#migration-from-v5x)
+- [v7.0 Hybrid Global-First](#v70-hybrid-global-first)
 - [Supported AI tools](#supported-ai-tools)
 - [Comparison](#comparison)
 - [Documentation](#documentation)
@@ -135,7 +138,7 @@ v6.0 strictly separates **global** (once per machine) from **per-project** (`/ai
 | Plugins | 4: `codex-plugin-cc`, `caveman`, `agentmemory` (+ systemd unit), `RTK` |
 | Hooks | 5: `PreToolUse`, `PostToolUse`, `SessionStart`, `PreCompact`, `Stop` |
 | Agents | 3 templates: `tech-lead`, `explorer`, `code-reviewer` |
-| Commands | 13: 9 `/aips:*` + dependency plugin commands |
+| Commands | 16: 12 `/aips:*` (9 base + 3 v7.0) + dependency plugin commands |
 | Skills | On-demand knowledge modules (caveman, codex, etc.) |
 | Output styles | `terse` (default), `caveman/full`, `caveman/ultra`, etc. |
 | Statusline | 3-line multi-line (see preview below) |
@@ -172,6 +175,15 @@ your-project/
 ```
 
 > Only `WORK_STATUS.md`, GitHub standard files, the `docs/` Korean mirrors, and `.github/` get committed. Everything in `.priv-storage/` and `tmp-igbkp/` is gitignored on purpose. **`CLAUDE.md` is reduced to ~150 lines** (v5.x was ~10kB) — Sections 8 / 9 / 10 / 12 / 13 moved out into the global plugin / skill layer.
+
+> **v7.0 layout shifts (opt-in via `/aips:upgrade --to v7.0`)**:
+>
+> | Item | v6.0 location | v7.0 location |
+> |---|---|---|
+> | `tmp-igbkp/` scripts | per-project (copied) | per-project (backup outputs) + global (scripts via `~/.local/bin/aips-*`) |
+> | `sessions/` | per-project only | per-project (fast-write buffer) + global mirror in `~/.claude/sessions/{path-hash}/` |
+> | `memory/` | per-project + global | global only — `~/.claude/projects/{path-encoded}/memory/` |
+> | AIPS `.gitignore` block | per-project (22 entries) | global `~/.config/git/ignore` + minimal per-project `.gitignore` |
 
 ---
 
@@ -239,7 +251,7 @@ project [main*3] wip:2 | opus-4.7 | ctx:8%(15.5k/200k) | cache:71%
 
 ## Slash commands
 
-### AIPS native (9)
+### AIPS native (12 — 9 base + 3 v7.0)
 
 | Command | Action |
 |---|---|
@@ -252,6 +264,9 @@ project [main*3] wip:2 | opus-4.7 | ctx:8%(15.5k/200k) | cache:71%
 | `/aips:repair` | Repair broken state (manual case-D trigger) |
 | `/aips:reset` | Reset project init (with backup) |
 | `/aips:uninstall` | Safe removal, global + project |
+| `/aips:upgrade --to v7.0` | **v7.0** — Extended `/aips:upgrade` flag: v6.0 → v7.0 hybrid migration (opt-in, non-breaking) |
+| `/aips:rebind <old-path>` | **v7.0** — Rebind globalized state (sessions mirror, memory) when a project directory moves or is renamed |
+| `/aips:scope` | **v7.0** — Diagnose what is globalized vs per-project for the current project; flag drift or orphaned global state |
 
 ### Dependency plugin commands
 
@@ -293,6 +308,50 @@ claude
 - **Custom slash commands** `/codex-brief`, `/codex-review`, `/codex-fix`, `/codex-relay-status` → replaced by `codex-plugin-cc`'s `/codex:*`
 - **`tmp-igbkp/codex-relay-{check,run}.sh`** → codex-plugin-cc manages its own locks / ledger
 - **`CLAUDE.md` Sections 8 / 9 / 10 / 12 / 13** → moved into the global plugin / skill / hook layer; per-project `CLAUDE.md` keeps only Sections 1-7 + 11 (~150 lines)
+
+---
+
+## v7.0 Hybrid Global-First
+
+v7.0 selectively globalizes per-project files where doing so improves safety and value (toolkit scripts, sessions mirror, memory store, AIPS gitignore block). Everything that needs to stay project-bound (rules, work state, MCP, team agents, backup outputs) remains per-project. **v6.0 setups are untouched** and migration is **opt-in**.
+
+### Globalized (4 items)
+
+| Item | v6.0 location | v7.0 location | Why |
+|---|---|---|---|
+| Toolkit scripts | `tmp-igbkp/*.sh` copied per project | `~/.local/bin/aips-*` (symlinks via `lib/globalize-toolkit.sh`) | One canonical copy, no drift, one PATH lookup |
+| Sessions | `.priv-storage/sessions/` only | `.priv-storage/sessions/` (fast-write buffer) + `~/.claude/sessions/{path-hash}/` mirror | Survives project-dir moves, cross-machine sync via single dir |
+| Memory | `.priv-storage/memory/` + global | global only — `~/.claude/projects/{path-encoded}/memory/` | Single source of truth, no duplicate-write drift |
+| `.gitignore` AIPS block | 22 entries per project `.gitignore` | `~/.config/git/ignore` (global) + minimal per-project `.gitignore` | Zero-noise project gitignore; works across all repos automatically |
+
+### Preserved per-project (5 items)
+
+| Item | Why it stays per-project |
+|---|---|
+| `CLAUDE.md` Sections 1–7 + 11 | Project rules + multi-tool guarantee (Claude/Codex/Cursor/Copilot all read it) |
+| `WORK_STATUS.md` | Team-shared task state — must live in the repo |
+| `.mcp.json` | Project-specific MCP server registry |
+| `tech-lead.md` + team agents | Per-project team composition |
+| `tmp-igbkp/` backup outputs | Encrypted backup archives belong with the project they back up |
+
+### New slash commands (3)
+
+- `/aips:upgrade --to v7.0` — extends existing `/aips:upgrade` with the v6.0 → v7.0 hybrid migration path
+- `/aips:rebind <old-path>` — rebind globalized state (sessions mirror, memory) when a project directory moves or is renamed
+- `/aips:scope` — diagnose what is globalized vs per-project for the current project, flag drift or orphaned global state
+
+### Migration
+
+```bash
+cd existing-v6-project
+claude
+> /aips:upgrade --to v7.0
+# → Strict mode (default): result is identical to a fresh v7.0 install.
+#   per-project tmp-igbkp/*.sh and sessions/*.md are purged after their
+#   global counterparts are verified. Full backup at
+#   tmp-igbkp/upgrade-v7-backup-{ts}/ is always taken first.
+# → Pass --keep-local-fallback to retain both as fallback (lenient).
+```
 
 ---
 
@@ -368,6 +427,24 @@ No. v5.2 stays supported as the stable line. Keep using v5.x until v6.0 is promo
 </details>
 
 <details>
+<summary><b>Do I need to upgrade from v6.0 to v7.0?</b></summary>
+
+No. v7.0 is **opt-in and non-breaking**. v6.0 setups continue working untouched. When you want the hybrid global-first benefits (one canonical toolkit, sessions mirror, global gitignore, single-source memory), run `/aips:upgrade --to v7.0` per project.
+</details>
+
+<details>
+<summary><b>What if I rename or move my project after v7.0 init?</b></summary>
+
+Run `/aips:rebind <old-path>` from inside the project's new location. It rewrites the path-hash-keyed globalized state (`~/.claude/sessions/{path-hash}/`, memory mappings) so sessions and memory continue resolving to the same project.
+</details>
+
+<details>
+<summary><b>How do I check what's globalized vs per-project?</b></summary>
+
+Run `/aips:scope`. It prints a diagnostic of which artifacts for the current project live globally vs per-project, and flags drift (e.g., per-project sessions buffer ahead of the global mirror) or orphaned global state (mirror exists for a project dir that no longer exists).
+</details>
+
+<details>
 <summary><b>What does install.sh touch on my system?</b></summary>
 
 `~/.claude/` (Claude Code global config), `~/.local/bin/rtk` (RTK binary), and a user-level systemd unit (agentmemory). It does not touch system-wide directories (`/usr/local/`, `/etc/`). Uninstall via `/aips:uninstall` for a safe rollback.
@@ -419,10 +496,11 @@ Open an issue or PR at <https://github.com/kernalix7/AIPS>. See [CONTRIBUTING.md
 
 ## Roadmap
 
-- **v6.0** *(in development)* — Plugin marketplace + 4 dependency plugins + 9 `/aips:*` commands
-- **v6.1** — `.devcontainer/` templates, GitHub Actions workflow for config validation
-- **v6.2** — Native Windows PowerShell hook layer (experimental)
-- **v7.0** — Per-language pluggable rule modules (`~/.claude/plugins/aips-rules-<lang>/`)
+- **v6.0** — Plugin marketplace + 4 dependency plugins + 9 `/aips:*` commands (baseline; remains valid)
+- **v7.0** *(in development)* — Hybrid global-first: globalized toolkit/sessions/memory/gitignore, 3 new `/aips:*` commands (`upgrade --to v7.0`, `rebind`, `scope`), opt-in non-breaking migration from v6.0
+- **v7.1** — agentmemory deeper integration (cross-project workflow recommendations, shared lesson surfaces)
+- **v7.2** — `/aips:rebind` UX improvements (auto-detect moved projects via path-hash heuristics)
+- **v8.0 (candidate)** — TBD; options under consideration: team-shared globals via cloud sync, or full plugin-marketplace publishing for third-party AIPS extensions
 
 See [CHANGELOG.md](CHANGELOG.md) for shipped versions.
 

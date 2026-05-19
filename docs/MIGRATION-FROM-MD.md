@@ -140,6 +140,95 @@ A successful migration shows `verify: PASS` with no FAILs. WARNs are acceptable 
 
 ---
 
+## Migrating from v6.0 to v7.0
+
+v7.0 builds on v6.0 by **globalizing** the heavy, project-invariant pieces — toolkit scripts, sessions, memory, and the AIPS `.gitignore` block — so each project on disk shrinks roughly 4x and a new laptop becomes a one-command resume of every project. The migration is **non-breaking**: existing v6.0 setups keep working until you opt in, and multi-tool parity is preserved (Codex / Cursor / Copilot still read the project's `CLAUDE.md` / `AGENTS.md` / `.cursorrules`).
+
+### Pre-flight
+
+- Verify v6.0 install: `/aips:health` reports all green (no FAILs).
+- Backup is automatic during upgrade, but extra: `bash tmp-igbkp/archive.sh`.
+- `agentmemory` must be running globally — on Linux: `systemctl --user is-active agentmemory.service`.
+- Disk: the upgrade backup tar is roughly the size of your current `.priv-storage/`.
+
+### Step 1 — Install v7.0 globals (if not already)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kernalix7/AIPS/main/install.sh | bash
+```
+
+`install.sh` in v7.0 adds **step F**, which runs `lib/globalize-toolkit.sh` to materialize the global toolkit (`~/.local/bin/aips-*`) and the global `.gitignore` BLOCKLIST via `lib/setup-global-gitignore.sh`. The script is idempotent — re-running on an existing install is safe.
+
+### Step 2 — Per-project upgrade
+
+```bash
+$ cd your-project && claude
+> /aips:upgrade --to v7.0
+```
+
+What happens:
+
+1. Detects current version from `.priv-storage/.aips-version` (or infers `v6.0` if the marker is absent but the v6.0 layout is present).
+2. Prints the upgrade plan — explicit REMOVE / GLOBALIZE / PRESERVE list.
+3. Prompts `Proceed? [Y/n]`.
+4. On confirm: snapshots everything to `tmp-igbkp/upgrade-v7-backup-{TIMESTAMP}/`.
+5. **GLOBALIZE**: toolkit scripts become symlinks into `~/.local/bin/`, the AIPS `.gitignore` block is stripped from per-project `.gitignore` (sed) and reinstalled at the global level, the local memory copy is dropped after verifying the global mirror, and existing session files are copied into the global mirror.
+6. **STRICT PURGE (default)**: result equals a fresh v7.0 install. Per-project `tmp-igbkp/*.sh` is deleted once each `~/.local/bin/aips-*` symlink is verified; `.priv-storage/sessions/*.md` is cleared after the global mirror is confirmed (directory kept for hook fast-write). Pass `--keep-local-fallback` to retain both as fallback (lenient).
+7. **PRESERVE**: `CLAUDE.md`, `WORK_STATUS.md`, `.mcp.json`, `tech-lead.md`, team agents, and any `tmp-igbkp/` encrypted backup outputs (snapshots, not the script files).
+8. Writes `.priv-storage/.aips-version` = `7.0`.
+9. Reports per-category counts (REMOVED / GLOBALIZED / PURGED / PRESERVED).
+
+### Step 3 — Verify post-upgrade
+
+```bash
+> /aips:scope
+> /aips:health
+```
+
+`/aips:scope` should show: **legacy v6.0 entries = 0**, **globalized count > 0**, all per-project preserved files present, and a summary line `AIPS version: 7.0`. `/aips:health` should return all green with the v7.0 verifier rules.
+
+### Project move / rename after v7.0
+
+Because sessions and project memory are keyed by path-hash in v7.0, moving or renaming a project requires a rebind:
+
+```bash
+# After mv ~/old-path ~/new-path
+$ cd ~/new-path && claude
+> /aips:rebind ~/old-path
+```
+
+`/aips:rebind`:
+- Computes the old and new path-hash + path-encoded values.
+- Moves `~/.claude/sessions/{old-hash}/` → `~/.claude/sessions/{new-hash}/`.
+- Moves `~/.claude/projects/{old-encoded}/` → `~/.claude/projects/{new-encoded}/`.
+- Rebinds agentmemory keys via API (best-effort) or prints manual steps if the API rebind fails.
+
+### Rollback
+
+If anything goes wrong, restore from the upgrade backup:
+
+```bash
+TS=<the timestamp shown by /aips:upgrade>    # e.g. 20260519-101522
+cp -r tmp-igbkp/upgrade-v7-backup-$TS/.priv-storage/* .priv-storage/
+cp tmp-igbkp/upgrade-v7-backup-$TS/.gitignore .gitignore
+rm .priv-storage/.aips-version
+```
+
+You are now back at v6.0. The global toolkit symlinks and global `.gitignore` block remain (harmless — v6.0 ignores them).
+
+### Troubleshooting v6.0 → v7.0
+
+- **"global memory not found"** — `agentmemory` was not running during v6.0 dual-write. Manual fix: copy `.priv-storage/memory/*` to `~/.claude/projects/{path-encoded}/memory/` before re-running the upgrade.
+- **"toolkit symlinks broken"** — `~/.local/bin` is not on PATH. Add to `~/.bashrc`: `export PATH="$HOME/.local/bin:$PATH"`.
+- **"sessions not mirroring"** — hooks were not updated. Re-run `install.sh` to refresh `~/.claude/hooks/`.
+- **"gitignore block missing"** — `setup-global-gitignore` did not run. Manual: `bash ~/.claude/plugins/cache/AIPS/AIPS/lib/setup-global-gitignore.sh`.
+
+### Multi-tool note
+
+Codex CLI, Cursor, and GitHub Copilot continue to read the project's `CLAUDE.md` / `AGENTS.md` / `.cursorrules` as in v6.0. v7.0 globalization does not touch these files — multi-tool support is identical to v6.0.
+
+---
+
 ## Troubleshooting
 
 ### `agentmemory` not starting

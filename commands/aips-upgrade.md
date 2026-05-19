@@ -91,7 +91,13 @@ UPGRADE_SH="$(find ~/.claude/plugins/cache/AIPS/AIPS/lib -name upgrade-to-v7.sh 
 bash "$UPGRADE_SH" "$(pwd)"
 ```
 
-Pass-through flags: `--dry-run`, `--force` (e.g. `/aips:upgrade --to v7.0 --dry-run`).
+Pass-through flags: `--dry-run`, `--force`, `--keep-local-fallback` (e.g. `/aips:upgrade --to v7.0 --dry-run`).
+
+**Strict mode is the default.** Result equals a fresh v7.0 install:
+- per-project `tmp-igbkp/*.sh` deleted after global `~/.local/bin/aips-*` symlinks verified
+- `.priv-storage/sessions/*.md` cleared after global mirror verified (dir kept for hook fast-write)
+
+Pass `--keep-local-fallback` to retain both as fallback (pre-strict v7.0 behavior). Full backup is always at `tmp-igbkp/upgrade-v7-backup-{ts}/` regardless of mode — strict purges are reversible.
 
 ### Post-checks
 
@@ -114,6 +120,8 @@ Upgraded to v7.0 — N files globalized, M files preserved, backup at tmp-igbkp/
 - Backup **before** any destructive operation. Never delete a source file until its mirror is verified.
 - `--dry-run` prints the plan and exits without touching the FS.
 - `--force` skips the v6.0 pre-check (use only if state is known good but the marker is missing).
+- `--keep-local-fallback` switches strict → lenient (per-project tmp-igbkp/*.sh + sessions/*.md retained).
+- Strict purges are guarded: a per-project script is deleted only if its `~/.local/bin/aips-*` symlink resolves; a session file is deleted only if its global mirror exists. Anything failing the guard is kept and reported via WARN.
 - Still no AI attribution in any output.
 
 Without `--to v7.0`, behavior is unchanged from the section above (global plugin update only).

@@ -7,6 +7,83 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v7.0 — Unreleased] — 2026-05-19
+
+**Hybrid Global-First architecture.** Non-breaking — v6.0 setups continue
+working; v7.0 migration is opt-in via `/aips:upgrade --to v7.0`.
+
+### Added
+- `lib/globalize-toolkit.sh` — symlinks `templates/tmp-igbkp/*.sh` to
+  `~/.local/bin/aips-*` (idempotent, `--dry-run` / `--unlink` flags).
+- `lib/setup-global-gitignore.sh` — installs AIPS gitignore block at
+  global `~/.config/git/ignore` (sets `core.excludesfile` if unset).
+- `lib/backup-global-memory.sh` — appends `~/.claude/projects/
+  {path-encoded}/memory/` to encrypted backup tarball.
+- `lib/upgrade-to-v7.sh` — v6.0 → v7.0 migration with backup to
+  `tmp-igbkp/upgrade-v7-backup-{ts}/`. Calls P1/P4/P6 helpers when
+  available, gracefully skips when absent.
+- `lib/rebind.sh` — rebinds globalized state when project path
+  changes (old → new path-hash, agentmemory metadata best-effort).
+- `lib/scope.sh` — diagnostic table of globalized vs per-project
+  files for the current project (includes legacy v6.0 warnings).
+- Slash commands: `/aips:rebind <old-path>`, `/aips:scope`,
+  extended `/aips:upgrade --to v7.0`.
+- Hook-level session global mirror: PostToolUse / PreCompact / Stop
+  / SessionStart now write to `~/.claude/sessions/{path-hash}/`
+  in addition to local `.priv-storage/sessions/`. SessionStart
+  prefers global on resume. flock-guarded writes.
+- `templates/tmp-igbkp/archive.sh` weaves global memory into tar
+  staging; `restore.sh` extracts global memory back on restore.
+- `lib/verify-init.sh` Section 10: v7.0 dual-write health checks
+  (local-memory deprecation, global memory presence, helper
+  availability).
+- `install.sh` step F: calls globalize-toolkit.sh after agentmemory
+  setup. Banner updated to v7.0.
+
+### Changed
+- `templates/.gitignore.patch` slimmed from full AIPS block to 6-line
+  per-project override stub. Standard ignores moved to global git
+  excludes file.
+- `templates/CLAUDE.md.tmpl` v7.0 header note: Section 8/9/10/12/13
+  inherit from global `~/.claude/CLAUDE.md`. Upgrade-path comment
+  pointing v6.0 users to `/aips:upgrade --to v7.0`.
+
+### Hybrid split (final v7.0)
+**Globalized (4):**
+- tmp-igbkp/ toolkit scripts (`~/.local/bin/aips-*`)
+- sessions/ logs (`~/.claude/sessions/{path-hash}/`)
+- memory/ files (`~/.claude/projects/{path-encoded}/memory/`)
+- .gitignore AIPS block (`~/.config/git/ignore`)
+
+**Preserved per-project (5):**
+- CLAUDE.md Section 1-7 + 11 (multi-tool guarantee)
+- WORK_STATUS.md (team-shared state)
+- .mcp.json (project-specific MCP servers)
+- tech-lead.md + team agents (project-customized)
+- tmp-igbkp/ encrypted backup outputs (repo-scoped snapshots)
+
+### Migration
+- From v6.0: `/aips:upgrade --to v7.0` — single confirm, full
+  backup to `tmp-igbkp/upgrade-v7-backup-{ts}/`. Idempotent.
+- **Strict mode default**: upgraded project ends up identical to a
+  fresh v7.0 install. Per-project `tmp-igbkp/*.sh` deleted after
+  `~/.local/bin/aips-*` symlinks verified; `.priv-storage/sessions/
+  *.md` cleared after global mirror at
+  `~/.claude/sessions/{path-hash}/` confirmed.
+- Pass `--keep-local-fallback` to retain both as fallback (lenient,
+  v7.0 pre-strict behavior).
+- Project rename / move: `/aips:rebind <old-path>` rebinds
+  globalized state.
+- Diagnose any project: `/aips:scope` (4-col table + legacy v6.0
+  warnings + summary stats).
+
+### Why v7.0 (not v6.1)
+- New cross-project state convention (path-hash key) requires
+  coordinated rollout.
+- Removes per-project tmp-igbkp/ script duplication (~120 KB / project).
+- Cuts per-project disk footprint roughly 4x for installed-tool state.
+- Multi-tool parity (Codex/Cursor/Copilot) preserved unchanged.
+
 ## [v6.0 — Unreleased] — 2026-05-19
 
 **BREAKING: AIPS becomes a Claude Code plugin.**

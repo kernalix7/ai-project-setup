@@ -140,6 +140,95 @@ bash ~/.claude/plugins/cache/AIPS/AIPS/lib/migrate-from-md.sh --dry-run
 
 ---
 
+## v6.0 → v7.0 마이그레이션
+
+v7.0 은 v6.0 위에 무거우면서 프로젝트-불변인 조각 — toolkit script, sessions, memory, AIPS `.gitignore` block — 을 **globalize** 합니다. 결과로 디스크의 프로젝트당 크기 약 4배 축소, 새 노트북에서 `curl install.sh | bash` 한 줄로 모든 프로젝트 즉시 resume. 마이그레이션은 **non-breaking**: 기존 v6.0 setup 은 opt-in 전까지 그대로 동작하고, multi-tool parity 도 유지 (Codex / Cursor / Copilot 은 여전히 프로젝트의 `CLAUDE.md` / `AGENTS.md` / `.cursorrules` 읽음).
+
+### Pre-flight
+
+- v6.0 설치 확인: `/aips:health` 가 all green (FAIL 0개).
+- backup 은 upgrade 중 자동, 추가 안전망: `bash tmp-igbkp/archive.sh`.
+- `agentmemory` 가 global 로 실행 중이어야 함 — Linux: `systemctl --user is-active agentmemory.service`.
+- 디스크: upgrade backup tar 는 현재 `.priv-storage/` 크기와 비슷.
+
+### Step 1 — v7.0 global 설치 (아직 안 했다면)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kernalix7/AIPS/main/install.sh | bash
+```
+
+v7.0 `install.sh` 는 **step F** 추가, `lib/globalize-toolkit.sh` 실행으로 global toolkit (`~/.local/bin/aips-*`) 과 `lib/setup-global-gitignore.sh` 를 통한 global `.gitignore` BLOCKLIST 설치. script idempotent — 기존 설치 위에 재실행 안전.
+
+### Step 2 — 프로젝트별 upgrade
+
+```bash
+$ cd your-project && claude
+> /aips:upgrade --to v7.0
+```
+
+동작 흐름:
+
+1. `.priv-storage/.aips-version` 에서 현재 버전 감지 (marker 없으면 v6.0 layout 존재 여부로 v6.0 추론).
+2. upgrade 계획 출력 — 명시적 REMOVE / GLOBALIZE / PRESERVE 리스트.
+3. `Proceed? [Y/n]` 프롬프트.
+4. 확인 시: 전체 snapshot 을 `tmp-igbkp/upgrade-v7-backup-{TIMESTAMP}/` 에 저장.
+5. **GLOBALIZE**: toolkit script 는 `~/.local/bin/` symlink 로 전환, AIPS `.gitignore` block 은 프로젝트 `.gitignore` 에서 sed 로 제거 후 global 레벨에 재설치, local memory 복사본은 global mirror 검증 후 삭제, 기존 session 파일들은 global mirror 로 복사.
+6. **STRICT PURGE (기본)**: 결과는 최초 v7.0 설치와 동일. per-project `tmp-igbkp/*.sh` 는 각 `~/.local/bin/aips-*` symlink 검증 후 삭제; `.priv-storage/sessions/*.md` 는 global mirror 확인 후 비움 (디렉토리는 hook fast-write 위해 유지). `--keep-local-fallback` 전달 시 fallback 유지 (lenient).
+7. **PRESERVE**: `CLAUDE.md`, `WORK_STATUS.md`, `.mcp.json`, `tech-lead.md`, team agent, `tmp-igbkp/` 암호화 backup 출력물 (snapshot, script 파일 아님).
+8. `.priv-storage/.aips-version` = `7.0` 작성.
+9. 카테고리별 카운트 보고 (REMOVED / GLOBALIZED / PURGED / PRESERVED).
+
+### Step 3 — upgrade 후 검증
+
+```bash
+> /aips:scope
+> /aips:health
+```
+
+`/aips:scope` 출력 기대: **legacy v6.0 entry = 0**, **globalized count > 0**, 프로젝트 preserved 파일 모두 존재, 요약 라인 `AIPS version: 7.0`. `/aips:health` 는 v7.0 verifier 룰로 all green 반환.
+
+### v7.0 이후 프로젝트 이동 / 리네임
+
+v7.0 에서는 session 과 project memory 가 path-hash 로 키잉되므로 프로젝트 이동/리네임 시 rebind 필요:
+
+```bash
+# mv ~/old-path ~/new-path 후
+$ cd ~/new-path && claude
+> /aips:rebind ~/old-path
+```
+
+`/aips:rebind` 동작:
+- old/new path-hash + path-encoded 계산.
+- `~/.claude/sessions/{old-hash}/` → `~/.claude/sessions/{new-hash}/` 이동.
+- `~/.claude/projects/{old-encoded}/` → `~/.claude/projects/{new-encoded}/` 이동.
+- agentmemory 키 API 로 rebind (best-effort) 또는 API rebind 실패 시 수동 단계 출력.
+
+### Rollback
+
+문제 발생 시 upgrade backup 에서 복구:
+
+```bash
+TS=<aips:upgrade 가 표시한 timestamp>    # 예: 20260519-101522
+cp -r tmp-igbkp/upgrade-v7-backup-$TS/.priv-storage/* .priv-storage/
+cp tmp-igbkp/upgrade-v7-backup-$TS/.gitignore .gitignore
+rm .priv-storage/.aips-version
+```
+
+v6.0 으로 복귀. global toolkit symlink 와 global `.gitignore` block 은 남음 (harmless — v6.0 이 무시).
+
+### v6.0 → v7.0 트러블슈팅
+
+- **"global memory not found"** — v6.0 dual-write 중 `agentmemory` 미실행. 수동 fix: upgrade 재실행 전 `.priv-storage/memory/*` 를 `~/.claude/projects/{path-encoded}/memory/` 로 복사.
+- **"toolkit symlinks broken"** — `~/.local/bin` 이 PATH 에 없음. `~/.bashrc` 에 추가: `export PATH="$HOME/.local/bin:$PATH"`.
+- **"sessions not mirroring"** — hook 업데이트 안 됨. `install.sh` 재실행으로 `~/.claude/hooks/` 갱신.
+- **"gitignore block missing"** — `setup-global-gitignore` 미실행. 수동: `bash ~/.claude/plugins/cache/AIPS/AIPS/lib/setup-global-gitignore.sh`.
+
+### Multi-tool 노트
+
+Codex CLI, Cursor, GitHub Copilot 은 v6.0 처럼 프로젝트의 `CLAUDE.md` / `AGENTS.md` / `.cursorrules` 그대로 읽음. v7.0 globalization 은 이 파일들을 건드리지 않음 — multi-tool 지원은 v6.0 과 동일.
+
+---
+
 ## 트러블슈팅
 
 ### `agentmemory` 시작 안 됨

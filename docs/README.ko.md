@@ -14,13 +14,13 @@ cd my-project && claude
 &gt; /aips:init
 </code></pre>
 
-[![Status](https://img.shields.io/badge/v6.0-개발_중-FF8C00?style=for-the-badge)](#-상태-v60-개발-중)
+[![Status](https://img.shields.io/badge/v7.0-개발_중-FF8C00?style=for-the-badge)](#-상태-v70-개발-중)
 [![Stable](https://img.shields.io/badge/stable-v5.2-2EA44F?style=for-the-badge)](../AI_PROJECT_SETUP.md)
 
 [![license](https://img.shields.io/github/license/kernalix7/AIPS?style=flat-square&color=blue)](../LICENSE)
 [![plugin](https://img.shields.io/badge/Claude%20Code-plugin-7C3AED?style=flat-square&logo=anthropic&logoColor=white)](https://claude.com/claude-code)
 [![deps](https://img.shields.io/badge/deps-4_plugins-blue?style=flat-square)](#-무엇이-설치되나)
-[![commands](https://img.shields.io/badge/commands-9_+_deps-2EA44F?style=flat-square)](#-슬래시-명령)
+[![commands](https://img.shields.io/badge/commands-12_+_deps-2EA44F?style=flat-square)](#-슬래시-명령)
 [![stars](https://img.shields.io/github/stars/kernalix7/AIPS?style=flat-square&color=FFD93D&logo=github&logoColor=white)](https://github.com/kernalix7/AIPS/stargazers)
 [![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](../CONTRIBUTING.md)
 
@@ -41,13 +41,15 @@ cd my-project && claude
 
 ---
 
-### 상태: v6.0 개발 중
+### 상태: v7.0 개발 중
 
 > **v5.2 안정**은 단일 파일 부트스트랩(`AI_PROJECT_SETUP.md`, ~7,600줄) 모델입니다. 다운로드받고 AI에게 "읽고 실행해줘"라고 시키는 방식. v5.x 사용자는 [`AI_PROJECT_SETUP.md`](../AI_PROJECT_SETUP.md)를 계속 쓰면 됩니다.
 >
-> **v6.0(개발 중)**은 동일 산출물을 **Claude Code 플러그인 마켓플레이스**로 재배포합니다. 머신당 한 번 `install.sh`를 실행하면 `~/.claude/`에 marketplace를 등록하고 의존 플러그인 4개를 install/update하며, 각 프로젝트에서는 `/aips:init` 한 번으로 신규/v5.x 마이그레이션/재init/복구를 **자동 분기**합니다. 7,600줄 마크다운을 매번 AI가 읽고 해석하던 모델을 버리고, 결정론적 install script + idempotent slash 명령으로 대체합니다.
+> **v6.0**은 동일 산출물을 **Claude Code 플러그인 marketplace**로 재배포합니다. 머신당 한 번 `install.sh`를 실행하면 `~/.claude/`에 marketplace를 등록하고 의존 plugin 4개를 install/update하며, 각 프로젝트에서는 `/aips:init` 한 번으로 신규/v5.x 마이그레이션/재init/복구를 **자동 분기**합니다. 7,600줄 마크다운을 매번 AI가 읽고 해석하던 모델을 버리고, 결정론적 install script + idempotent slash 명령으로 대체합니다. v6.0 셋업은 그대로 유효한 baseline입니다.
 >
-> 이 문서는 **v6.0**을 설명합니다. v5.2가 필요하다면 [영문 README v5.2 섹션](../README.md) 또는 [`AI_PROJECT_SETUP.md`](../AI_PROJECT_SETUP.md)을 참고하세요.
+> **v7.0(개발 중)**은 v6.0 위에 **hybrid global-first** 모델을 얹습니다 — toolkit script, sessions mirror, memory, AIPS gitignore block을 `~/.claude/` / `~/.local/bin/` / `~/.config/git/ignore`로 globalize하고, CLAUDE.md / WORK_STATUS.md / `.mcp.json` / agent 파일 / `tmp-igbkp/` 백업 산출물은 그대로 프로젝트별로 둡니다. v7.0은 **non-breaking**입니다: 기존 v6.0 프로젝트는 손대지 않고 그대로 동작하며, 마이그레이션은 `/aips:upgrade --to v7.0`으로 opt-in.
+>
+> 이 문서는 **v7.0**을 설명하며 v6.0 baseline도 함께 다룹니다. v5.2가 필요하다면 [영문 README v5.2 섹션](../README.md) 또는 [`AI_PROJECT_SETUP.md`](../AI_PROJECT_SETUP.md)을 참고하세요.
 
 ---
 
@@ -60,6 +62,7 @@ cd my-project && claude
 - [Statusline 미리보기](#-statusline-미리보기)
 - [슬래시 명령](#-슬래시-명령)
 - [v5.x → v6.0 마이그레이션](#-v5x--v60-마이그레이션)
+- [v7.0 Hybrid Global-First](#-v70-hybrid-global-first)
 - [지원 AI 도구](#-지원-ai-도구)
 - [비교](#-비교)
 - [문서](#-문서)
@@ -135,7 +138,7 @@ v6.0은 글로벌(머신당 1회)과 프로젝트별(`/aips:init`)을 명확히 
 | Plugins | 4개: `codex-plugin-cc`, `caveman`, `agentmemory` (+ systemd unit), `RTK` |
 | Hooks | 5개: `PreToolUse`, `PostToolUse`, `SessionStart`, `PreCompact`, `Stop` |
 | Agents | 3개 템플릿: `tech-lead`, `explorer`, `code-reviewer` |
-| Commands | 13개: `/aips:*` 9개 + 의존 플러그인 명령 |
+| Commands | 16개: `/aips:*` 12개 (base 9 + v7.0 3) + 의존 plugin 명령 |
 | Skills | on-demand 지식 모듈 (caveman, codex 등) |
 | Output styles | `terse` (기본), `caveman/full`, `caveman/ultra` 등 |
 | Statusline | 3줄 멀티 라인 (아래 미리보기) |
@@ -172,6 +175,15 @@ your-project/
 ```
 
 > `WORK_STATUS.md`, GitHub 표준 파일, `docs/` 한국어 미러, `.github/`만 커밋됩니다. `.priv-storage/`와 `tmp-igbkp/`의 모든 것은 의도적으로 gitignore 처리됩니다. **CLAUDE.md는 ~150줄로 축소** (v5.x는 ~10kB) — 8/9/10/12/13 섹션이 글로벌 plugin/skill로 빠졌기 때문.
+
+> **v7.0 레이아웃 변경 (opt-in, `/aips:upgrade --to v7.0`)**:
+>
+> | 항목 | v6.0 위치 | v7.0 위치 |
+> |---|---|---|
+> | `tmp-igbkp/` script | 프로젝트별 (복사본) | 프로젝트별 (백업 산출물) + global (`~/.local/bin/aips-*` script) |
+> | `sessions/` | 프로젝트별만 | 프로젝트별 (fast-write buffer) + global mirror `~/.claude/sessions/{path-hash}/` |
+> | `memory/` | 프로젝트별 + global | global only — `~/.claude/projects/{path-encoded}/memory/` |
+> | AIPS `.gitignore` block | 프로젝트별 22개 항목 | global `~/.config/git/ignore` + 최소 per-project `.gitignore` |
 
 ---
 
@@ -239,7 +251,7 @@ project [main*3] wip:2 | opus-4.7 | ctx:8%(15.5k/200k) | cache:71%
 
 ## 슬래시 명령
 
-### AIPS 네이티브 (9개)
+### AIPS 네이티브 (12개 — base 9 + v7.0 3)
 
 | 명령 | 동작 |
 |---|---|
@@ -252,6 +264,9 @@ project [main*3] wip:2 | opus-4.7 | ctx:8%(15.5k/200k) | cache:71%
 | `/aips:repair` | 손상 상태 복구 (D 케이스 수동 트리거) |
 | `/aips:reset` | 프로젝트 init 초기화 (백업 후) |
 | `/aips:uninstall` | 글로벌 + 프로젝트 안전 제거 |
+| `/aips:upgrade --to v7.0` | **v7.0** — 기존 `/aips:upgrade` 확장 플래그: v6.0 → v7.0 hybrid 마이그레이션 (opt-in, non-breaking) |
+| `/aips:rebind <old-path>` | **v7.0** — 프로젝트 디렉터리가 이동/이름 변경되었을 때 globalize된 상태(sessions mirror, memory)를 rebind |
+| `/aips:scope` | **v7.0** — 현재 프로젝트의 globalize vs per-project 레이아웃을 진단; drift나 orphan global 상태 표시 |
 
 ### 의존 plugin 명령
 
@@ -291,6 +306,50 @@ claude
 - **커스텀 슬래시 명령** `/codex-brief`, `/codex-review`, `/codex-fix`, `/codex-relay-status` → codex-plugin-cc의 `/codex:*`로 대체
 - **`tmp-igbkp/codex-relay-{check,run}.sh`** → codex-plugin-cc가 자체 락/원장 관리
 - **CLAUDE.md 섹션 8/9/10/12/13** → 글로벌 plugin/skill/hook으로 이전, 프로젝트 CLAUDE.md는 1-7 + 11 (~150줄)만
+
+---
+
+## v7.0 Hybrid Global-First
+
+v7.0은 안전성과 가치가 향상되는 항목들(toolkit script, sessions mirror, memory store, AIPS gitignore block)을 선택적으로 globalize합니다. 프로젝트에 bound되어야 하는 항목들(rules, work state, MCP, team agent, 백업 산출물)은 그대로 per-project. **v6.0 셋업은 손대지 않으며** 마이그레이션은 **opt-in**.
+
+### Globalize 항목 (4개)
+
+| 항목 | v6.0 위치 | v7.0 위치 | 이유 |
+|---|---|---|---|
+| Toolkit script | `tmp-igbkp/*.sh` 프로젝트별 복사 | `~/.local/bin/aips-*` (`lib/globalize-toolkit.sh`를 통한 symlink) | 단일 canonical copy, drift 없음, PATH 한 번 lookup |
+| Sessions | `.priv-storage/sessions/`만 | `.priv-storage/sessions/` (fast-write buffer) + `~/.claude/sessions/{path-hash}/` mirror | 프로젝트 디렉터리 이동에도 살아남고, 단일 디렉터리로 머신 간 sync |
+| Memory | `.priv-storage/memory/` + global | global only — `~/.claude/projects/{path-encoded}/memory/` | 단일 진실 공급원, 중복 쓰기 drift 없음 |
+| `.gitignore` AIPS block | 프로젝트별 22개 항목 | `~/.config/git/ignore` (global) + 최소 per-project `.gitignore` | 프로젝트 gitignore 노이즈 0, 모든 repo에 자동 적용 |
+
+### Preserved per-project (5개)
+
+| 항목 | per-project 유지 이유 |
+|---|---|
+| `CLAUDE.md` 섹션 1–7 + 11 | 프로젝트 rules + 멀티 도구 보장 (Claude/Codex/Cursor/Copilot 모두 읽음) |
+| `WORK_STATUS.md` | 팀 공유 작업 상태 — repo에 있어야 함 |
+| `.mcp.json` | 프로젝트별 MCP server registry |
+| `tech-lead.md` + team agents | 프로젝트별 팀 구성 |
+| `tmp-igbkp/` 백업 산출물 | 암호화 백업 아카이브는 백업 대상 프로젝트와 함께 있어야 함 |
+
+### 새 slash 명령 (3개)
+
+- `/aips:upgrade --to v7.0` — 기존 `/aips:upgrade`를 확장해 v6.0 → v7.0 hybrid 마이그레이션 경로를 추가
+- `/aips:rebind <old-path>` — 프로젝트 디렉터리가 이동/이름 변경되었을 때 globalize된 상태(sessions mirror, memory)를 rebind
+- `/aips:scope` — 현재 프로젝트의 globalize vs per-project 레이아웃을 진단, drift나 orphan global 상태 표시
+
+### 마이그레이션
+
+```bash
+cd existing-v6-project
+claude
+> /aips:upgrade --to v7.0
+# → Strict 모드 (기본): 결과는 최초 v7.0 설치와 동일.
+#   per-project tmp-igbkp/*.sh + sessions/*.md는 글로벌 카운터파트
+#   검증 후 삭제. 전체 백업은 항상 tmp-igbkp/upgrade-v7-backup-{ts}/
+#   에 먼저 저장.
+# → --keep-local-fallback 전달 시 fallback 유지 (lenient).
+```
 
 ---
 
@@ -366,6 +425,24 @@ Codex / Cursor / Copilot 대상 플러그인 동급 패리티 (hooks, 슬래시 
 </details>
 
 <details>
+<summary><b>v6.0에서 v7.0으로 강제로 옮겨야 하나요?</b></summary>
+
+아니요. v7.0은 **opt-in, non-breaking**입니다. v6.0 셋업은 손대지 않고 그대로 동작합니다. hybrid global-first 이점(단일 canonical toolkit, sessions mirror, global gitignore, 단일 소스 memory)이 필요해지면 프로젝트에서 `/aips:upgrade --to v7.0`을 실행하세요.
+</details>
+
+<details>
+<summary><b>v7.0 init 이후 프로젝트 이름을 바꾸거나 이동했어요.</b></summary>
+
+새 위치의 프로젝트 안에서 `/aips:rebind <old-path>`를 실행하세요. path-hash 기반 globalize 상태(`~/.claude/sessions/{path-hash}/`, memory 매핑)를 다시 작성해서, sessions와 memory가 동일 프로젝트로 계속 해석되게 합니다.
+</details>
+
+<details>
+<summary><b>무엇이 globalize되어 있고 무엇이 per-project인지 확인하려면?</b></summary>
+
+`/aips:scope`를 실행하세요. 현재 프로젝트의 산출물 중 무엇이 global이고 무엇이 per-project인지 진단을 출력하며, drift(예: per-project sessions buffer가 global mirror보다 앞서 있음)나 orphan global 상태(존재하지 않는 프로젝트 디렉터리에 대한 mirror)를 표시합니다.
+</details>
+
+<details>
 <summary><b>install.sh가 시스템 어디를 건드리나요?</b></summary>
 
 `~/.claude/` (Claude Code 글로벌 설정), `~/.local/bin/rtk` (RTK 바이너리), 사용자 단위 systemd unit(agentmemory). 시스템 전역 디렉터리(`/usr/local/`, `/etc/`)는 건드리지 않습니다. uninstall은 `/aips:uninstall`로 안전 롤백.
@@ -417,10 +494,11 @@ Git Bash, WSL, MSYS2에서 동작합니다. install.sh는 bash이고, hook도 ba
 
 ## 로드맵
 
-- **v6.0** — 플러그인 마켓플레이스 + 의존 plugin 4개 + `/aips:*` 9개 명령 (개발 중)
-- **v6.1** — `.devcontainer/` 템플릿, 설정 검증용 GitHub Actions 워크플로
-- **v6.2** — 네이티브 Windows PowerShell hook (실험적)
-- **v7.0** — 언어별 plug-in rule 모듈(`~/.claude/plugins/aips-rules-<lang>/`)
+- **v6.0** — plugin marketplace + 의존 plugin 4개 + `/aips:*` 9개 명령 (baseline; 그대로 유효)
+- **v7.0** *(개발 중)* — Hybrid global-first: toolkit/sessions/memory/gitignore globalize, 새 `/aips:*` 명령 3개 (`upgrade --to v7.0`, `rebind`, `scope`), v6.0 → v7.0은 opt-in non-breaking 마이그레이션
+- **v7.1** — agentmemory 심화 통합 (cross-project workflow 추천, 공유 lesson surface)
+- **v7.2** — `/aips:rebind` UX 개선 (path-hash heuristic으로 이동된 프로젝트 auto-detect)
+- **v8.0 (candidate)** — TBD; 후보: cloud sync 기반 team-shared global, 또는 third-party AIPS 확장용 full plugin marketplace 퍼블리싱
 
 버전 히스토리는 [CHANGELOG.md](../CHANGELOG.md) 참조.
 

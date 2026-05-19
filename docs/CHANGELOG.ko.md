@@ -6,6 +6,83 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르며, [Semantic Versioning](https://semver.org/lang/ko/)을 준수합니다.
 
+## [v7.0 — Unreleased] — 2026-05-19
+
+**Hybrid Global-First 아키텍처.** Non-breaking — v6.0 설치는 그대로 작동하며,
+v7.0 마이그레이션은 `/aips:upgrade --to v7.0`을 통한 opt-in 방식입니다.
+
+### 추가
+- `lib/globalize-toolkit.sh` — `templates/tmp-igbkp/*.sh`를
+  `~/.local/bin/aips-*`로 symlink (idempotent, `--dry-run` / `--unlink`
+  플래그).
+- `lib/setup-global-gitignore.sh` — 글로벌 `~/.config/git/ignore`에
+  AIPS gitignore 블록 설치 (`core.excludesfile` 미설정 시 설정).
+- `lib/backup-global-memory.sh` — `~/.claude/projects/
+  {path-encoded}/memory/`를 암호화 백업 tarball에 추가.
+- `lib/upgrade-to-v7.sh` — v6.0 → v7.0 마이그레이션, `tmp-igbkp/
+  upgrade-v7-backup-{ts}/`로 백업. P1/P4/P6 helper가 있으면 호출,
+  없으면 graceful skip.
+- `lib/rebind.sh` — 프로젝트 경로 변경 시 globalize된 상태를 rebind
+  (old → new path-hash, agentmemory 메타데이터는 best-effort).
+- `lib/scope.sh` — 현재 프로젝트의 globalize된 파일 vs per-project
+  파일 진단 테이블 (legacy v6.0 경고 포함).
+- Slash commands: `/aips:rebind <old-path>`, `/aips:scope`,
+  확장된 `/aips:upgrade --to v7.0`.
+- Hook 수준 세션 global mirror: PostToolUse / PreCompact / Stop /
+  SessionStart가 로컬 `.priv-storage/sessions/`에 더해
+  `~/.claude/sessions/{path-hash}/`에도 기록. SessionStart는 resume
+  시 global을 우선. flock-guarded 쓰기.
+- `templates/tmp-igbkp/archive.sh`가 global memory를 tar staging에
+  포함; `restore.sh`가 복원 시 global memory를 다시 추출.
+- `lib/verify-init.sh` Section 10: v7.0 dual-write 헬스 체크
+  (local-memory deprecation, global memory 존재 여부, helper 가용성).
+- `install.sh` step F: agentmemory 셋업 이후 globalize-toolkit.sh
+  호출. 배너를 v7.0으로 업데이트.
+
+### 변경
+- `templates/.gitignore.patch`를 전체 AIPS 블록에서 6줄 per-project
+  override stub으로 축소. 표준 ignore는 global git excludes 파일로
+  이동.
+- `templates/CLAUDE.md.tmpl` v7.0 헤더 노트: Section 8/9/10/12/13은
+  글로벌 `~/.claude/CLAUDE.md`로부터 상속. v6.0 사용자를
+  `/aips:upgrade --to v7.0`으로 안내하는 업그레이드 경로 주석 추가.
+
+### Hybrid 분리 (v7.0 최종)
+**Globalize (4):**
+- tmp-igbkp/ toolkit scripts (`~/.local/bin/aips-*`)
+- sessions/ 로그 (`~/.claude/sessions/{path-hash}/`)
+- memory/ 파일 (`~/.claude/projects/{path-encoded}/memory/`)
+- .gitignore AIPS 블록 (`~/.config/git/ignore`)
+
+**Per-project 유지 (5):**
+- CLAUDE.md Section 1-7 + 11 (멀티툴 보장)
+- WORK_STATUS.md (팀 공유 상태)
+- .mcp.json (프로젝트별 MCP 서버)
+- tech-lead.md + team agents (프로젝트 커스터마이즈)
+- tmp-igbkp/ 암호화 백업 산출물 (저장소 단위 스냅샷)
+
+### 마이그레이션
+- v6.0에서: `/aips:upgrade --to v7.0` — 1회 확인, `tmp-igbkp/
+  upgrade-v7-backup-{ts}/`로 전체 백업. Idempotent.
+- **Strict 모드 기본**: 업그레이드된 프로젝트가 최초 v7.0 설치와
+  동일한 상태로 됨. per-project `tmp-igbkp/*.sh`는 글로벌
+  `~/.local/bin/aips-*` symlink 검증 후 삭제; `.priv-storage/
+  sessions/*.md`는 글로벌 mirror (`~/.claude/sessions/{path-hash}/`)
+  확인 후 비움.
+- `--keep-local-fallback` 전달 시 fallback 유지 (lenient, v7.0
+  pre-strict 동작).
+- 프로젝트 이름 변경 / 이동: `/aips:rebind <old-path>`로 globalize된
+  상태 rebind.
+- 모든 프로젝트 진단: `/aips:scope` (4열 테이블 + legacy v6.0 경고
+  + 요약 통계).
+
+### 왜 v7.0인가 (v6.1 아닌)
+- 새 cross-project 상태 규약 (path-hash key)이 조율된 롤아웃을
+  요구.
+- per-project tmp-igbkp/ script 중복 제거 (~120 KB / 프로젝트).
+- 설치형 툴 상태에 대한 per-project 디스크 footprint를 약 4배 절감.
+- 멀티툴 패리티 (Codex/Cursor/Copilot) 무변경 유지.
+
 ## [v6.0 — Unreleased] — 2026-05-19
 
 **BREAKING: AIPS가 Claude Code plugin으로 전환됩니다.**

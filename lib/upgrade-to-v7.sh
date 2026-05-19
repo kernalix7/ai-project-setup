@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # upgrade-to-v7.sh — v6.0 → v7.0 hybrid migration for a single project.
-# Args: <project_root> [--dry-run] [--force]
+# Args: <project_root> [--dry-run] [--force] [--keep-local-fallback]
+# Default (strict): result equals a fresh v7.0 install — per-project
+# tmp-igbkp/*.sh scripts are deleted (global symlinks at ~/.local/bin/aips-*
+# verified first), and .priv-storage/sessions/*.md is cleared after global
+# mirror is confirmed. Pass --keep-local-fallback to retain both as
+# fallback (v7.0 pre-strict behavior).
 # Exits non-zero on pre-check failure (unless --force).
 set -euo pipefail
 
@@ -11,11 +16,13 @@ PROJECT_ROOT=""
 DRY_RUN=0
 FORCE=0
 PLAN_ONLY=0
+STRICT=1  # default: end state equals fresh v7.0 install
 for a in "$@"; do
   case "$a" in
     --dry-run) DRY_RUN=1 ;;
     --force)   FORCE=1   ;;
     --plan)    PLAN_ONLY=1 ;;
+    --keep-local-fallback) STRICT=0 ;;
     -*)        echo "[upgrade-v7] unknown flag: $a" >&2; exit 2 ;;
     *)         [ -z "$PROJECT_ROOT" ] && PROJECT_ROOT="$a" ;;
   esac
@@ -53,13 +60,39 @@ run()  { if [ "$DRY_RUN" -eq 1 ]; then printf '[upgrade-v7] (dry) %s\n' "$*"; el
 # PLAN block (printed for --plan and at start of full run)
 # ---------------------------------------------------------------------------
 print_plan() {
+  local mode="STRICT (fresh-install equivalent)"
+  [ "$STRICT" -eq 0 ] && mode="LENIENT (keep local fallback)"
   cat <<EOF
 [plan] project   $PROJECT_ROOT
+[plan] mode      $mode
 [plan] backup    → $BACKUP_DIR
 [plan] globalize → hooks, skills, output-styles, statusline → ~/.claude/
+[plan] toolkit   → symlink tmp-igbkp/*.sh → ~/.local/bin/aips-* (via globalize-toolkit.sh)
+EOF
+  if [ "$STRICT" -eq 1 ]; then
+    cat <<EOF
+[plan] toolkit   → DELETE per-project tmp-igbkp/*.sh after symlink verification (strict)
+EOF
+  else
+    cat <<EOF
+[plan] toolkit   → keep per-project tmp-igbkp/*.sh as fallback (lenient)
+EOF
+  fi
+  cat <<EOF
 [plan] gitignore → strip per-project AIPS block, add to ~/.config/git/ignore
 [plan] memory    → mirror .priv-storage/memory/* → $GLOBAL_MEMORY/, then prune
 [plan] sessions  → mirror .priv-storage/sessions/* → $GLOBAL_SESSIONS/
+EOF
+  if [ "$STRICT" -eq 1 ]; then
+    cat <<EOF
+[plan] sessions  → DELETE .priv-storage/sessions/*.md after mirror verification (strict; dir kept for hook fast-write)
+EOF
+  else
+    cat <<EOF
+[plan] sessions  → keep .priv-storage/sessions/*.md as fallback (lenient)
+EOF
+  fi
+  cat <<EOF
 [plan] CLAUDE.md → trim Sections 8–13 ref comments (re-render via lib/render-claude-md.sh)
 [plan] marker    → write $MARKER ← 7.0
 EOF
@@ -135,6 +168,25 @@ else
   warn "globalize-toolkit.sh not found in $LIB_DIR — skipped"
 fi
 
+# 3-strict: delete per-project tmp-igbkp/*.sh after verifying global symlinks
+if [ "$STRICT" -eq 1 ] && [ "$GLOBALIZED" -eq 1 ] && [ -d "$PROJECT_ROOT/tmp-igbkp" ]; then
+  PURGED=0
+  KEPT=0
+  for sh in "$PROJECT_ROOT"/tmp-igbkp/*.sh; do
+    [ -e "$sh" ] || continue
+    name="$(basename "$sh" .sh)"
+    target="$HOME/.local/bin/aips-$name"
+    if [ -L "$target" ] || [ -x "$target" ]; then
+      run "rm -f '$sh'"
+      PURGED=$((PURGED + 1))
+    else
+      warn "global aips-$name missing — keeping $sh as fallback"
+      KEPT=$((KEPT + 1))
+    fi
+  done
+  log "toolkit    strict purge: deleted $PURGED per-project scripts (kept $KEPT as fallback)"
+fi
+
 # ---------------------------------------------------------------------------
 # 4. globalize gitignore (delegate to P4 deliverable) + strip per-project block
 # ---------------------------------------------------------------------------
@@ -190,12 +242,38 @@ fi
 # 6. sessions: ensure global mirror exists; hooks will keep it up to date
 # ---------------------------------------------------------------------------
 SESS_SRC="$PRIV/sessions"
+SESS_MIRROR_OK=0
 if [ -d "$SESS_SRC" ]; then
   run "mkdir -p '$GLOBAL_SESSIONS'"
   if [ "$DRY_RUN" -ne 1 ]; then
     cp -an "$SESS_SRC"/. "$GLOBAL_SESSIONS"/ 2>/dev/null || true
   fi
-  log "sessions   mirrored → $GLOBAL_SESSIONS (hooks own ongoing sync)"
+  # verify each local *.md has a counterpart globally
+  MISSING=0
+  while IFS= read -r -d '' f; do
+    rel="${f#$SESS_SRC/}"
+    [ -e "$GLOBAL_SESSIONS/$rel" ] || MISSING=$((MISSING + 1))
+  done < <(find "$SESS_SRC" -type f -name '*.md' -print0 2>/dev/null)
+  if [ "$MISSING" -eq 0 ]; then
+    SESS_MIRROR_OK=1
+    log "sessions   mirrored → $GLOBAL_SESSIONS (hooks own ongoing sync)"
+  else
+    warn "sessions mirror incomplete ($MISSING missing) — keeping per-project copies intact"
+  fi
+fi
+
+# 6-strict: delete per-project sessions/*.md after mirror verified.
+# Keep the dir + .keep file so hooks (PostToolUse/Stop) can fast-write
+# without mkdir overhead.
+if [ "$STRICT" -eq 1 ] && [ "$SESS_MIRROR_OK" -eq 1 ]; then
+  if [ "$DRY_RUN" -ne 1 ]; then
+    find "$SESS_SRC" -mindepth 1 -type f -name '*.md' -delete 2>/dev/null || true
+    find "$SESS_SRC" -mindepth 1 -type f -name '*.tsv' -delete 2>/dev/null || true
+    find "$SESS_SRC" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+    mkdir -p "$SESS_SRC"
+    touch "$SESS_SRC/.keep"
+  fi
+  log "sessions   strict purge: cleared $SESS_SRC/*.md+.tsv (dir kept for hook fast-write)"
 fi
 
 # ---------------------------------------------------------------------------
