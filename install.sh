@@ -1,13 +1,41 @@
 #!/usr/bin/env bash
-# AIPS v7.0 installer — user-level, idempotent, no sudo.
+# AIPS installer — user-level, idempotent, no sudo.
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/kernalix7/AIPS/main/install.sh | bash
 #   bash install.sh [--no-plugin-update] [--with codex,caveman,agentmemory,rtk] [--local-source <path>] [--dry-run] [--quiet]
 #
-# v7.0: After plugin install, globalizes templates/tmp-igbkp/*.sh as ~/.local/bin/aips-*
+# After plugin install, globalizes templates/tmp-igbkp/*.sh as ~/.local/bin/aips-*
 # symlinks so per-project copies are no longer needed. Backup output stays per-project.
 
 set -euo pipefail
+
+# Resolve the AIPS plugin version dynamically (never hardcoded).
+# Order: local clone (when --local-source) → installed cache → GitHub raw.
+read_plugin_version() {
+  local v=""
+  # 1. Local source clone (passed via --local-source).
+  if [ -n "${LOCAL_SOURCE:-}" ] && [ -f "$LOCAL_SOURCE/.claude-plugin/plugin.json" ]; then
+    v="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$LOCAL_SOURCE/.claude-plugin/plugin.json" | head -1)"
+    [ -n "$v" ] && { printf '%s' "$v"; return; }
+  fi
+  # 2. Already-installed cache (find highest version dir).
+  local cache_root="$HOME/.claude/plugins/cache/AIPS/AIPS"
+  if [ -d "$cache_root" ]; then
+    local latest_manifest
+    latest_manifest="$(find "$cache_root" -maxdepth 3 -name plugin.json 2>/dev/null | sort -V | tail -1)"
+    if [ -n "$latest_manifest" ] && [ -f "$latest_manifest" ]; then
+      v="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$latest_manifest" | head -1)"
+      [ -n "$v" ] && { printf '%s' "$v"; return; }
+    fi
+  fi
+  # 3. GitHub raw URL (network).
+  if command -v curl >/dev/null 2>&1; then
+    v="$(curl -fsSL --max-time 10 'https://raw.githubusercontent.com/kernalix7/AIPS/main/.claude-plugin/plugin.json' 2>/dev/null \
+      | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+    [ -n "$v" ] && { printf '%s' "$v"; return; }
+  fi
+  printf 'unknown'
+}
 
 # ---------- color / logging ----------
 if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
@@ -66,8 +94,9 @@ CUR_STEP=0
 next_step() { CUR_STEP=$((CUR_STEP+1)); step "$CUR_STEP" "$TOTAL_STEPS" "$1"; }
 
 # ---------- banner ----------
+PLUGIN_VERSION="$(read_plugin_version)"
 printf "\n%s%s╔════════════════════════════════════════════════════════════════╗%s\n" "$C_BOLD" "$C_CYAN" "$C_RESET"
-printf "%s%s║  AIPS v7.0 installer — Claude Code plugin distribution         ║%s\n" "$C_BOLD" "$C_CYAN" "$C_RESET"
+printf "%s%s║  AIPS v%-7s installer — Claude Code plugin distribution     ║%s\n" "$C_BOLD" "$C_CYAN" "$PLUGIN_VERSION" "$C_RESET"
 printf "%s%s║  Repo: https://github.com/kernalix7/AIPS                       ║%s\n" "$C_BOLD" "$C_CYAN" "$C_RESET"
 printf "%s%s║  License: MIT                                                  ║%s\n" "$C_BOLD" "$C_CYAN" "$C_RESET"
 printf "%s%s╚════════════════════════════════════════════════════════════════╝%s\n\n" "$C_BOLD" "$C_CYAN" "$C_RESET"
@@ -335,7 +364,7 @@ if want agentmemory && [ "$UNAME" = "Linux" ] && command -v systemctl >/dev/null
 fi
 
 # ---------- Globalize toolkit ----------
-next_step "Globalize toolkit (v7.0 hybrid)"
+next_step "Globalize toolkit (hybrid layout)"
 detail "Symlinks 9 toolkit scripts → ~/.local/bin/aips-*"
 detail "aips-archive, aips-restore, aips-purge-history, aips-verify-setup,"
 detail "aips-uninstall, aips-smoke-test-hooks, aips-secret-guard,"
@@ -361,11 +390,13 @@ fi
 
 # ---------- Final summary ----------
 echo
+# Re-resolve in case the cache was empty when the script started.
+PLUGIN_VERSION="$(read_plugin_version)"
 if [ "$FAILED" = "0" ]; then
   cat <<EOF
 
 ${C_BOLD}${C_GREEN}╔════════════════════════════════════════════════════════════════╗
-║  AIPS v7.0 install complete                                    ║
+║  AIPS v${PLUGIN_VERSION} install complete
 ╚════════════════════════════════════════════════════════════════╝${C_RESET}
 
 ${C_BOLD}Globals installed at:${C_RESET}

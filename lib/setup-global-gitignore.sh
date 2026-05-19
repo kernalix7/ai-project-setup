@@ -38,11 +38,29 @@ case "$EXCLUDES_FILE" in
   "~/"*) EXCLUDES_FILE="$HOME/${EXCLUDES_FILE#~/}" ;;
 esac
 
-BEGIN_MARK="# === AIPS v7.0 (global) ==="
-END_MARK="# === /AIPS v7.0 ==="
+# Read plugin major.minor from the manifest next to this script — keeps the
+# block marker stable across patch releases (v7.0.x all share "v7.0" marker).
+PLUGIN_JSON="$(cd "$(dirname "$0")/.." && pwd)/.claude-plugin/plugin.json"
+PLUGIN_FULL="unknown"
+PLUGIN_MM="unknown"
+if [ -f "$PLUGIN_JSON" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    PLUGIN_FULL="$(jq -r '.version // "unknown"' "$PLUGIN_JSON")"
+  else
+    PLUGIN_FULL="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" | head -1)"
+    [ -z "$PLUGIN_FULL" ] && PLUGIN_FULL="unknown"
+  fi
+  if [ "$PLUGIN_FULL" != "unknown" ]; then
+    PLUGIN_MM="${PLUGIN_FULL%.*}"
+    [ -z "$PLUGIN_MM" ] && PLUGIN_MM="$PLUGIN_FULL"
+  fi
+fi
 
-read -r -d '' AIPS_BLOCK <<'BLOCK' || true
-# === AIPS v7.0 (global) ===
+BEGIN_MARK="# === AIPS v${PLUGIN_MM} (global) ==="
+END_MARK="# === /AIPS v${PLUGIN_MM} ==="
+
+AIPS_BLOCK="$(cat <<BLOCK
+${BEGIN_MARK}
 .priv-storage/
 tmp-igbkp/
 .claude/
@@ -59,10 +77,11 @@ AGENTS.md
 uninstall-backup-*/
 migrate-backup-*/
 reset-backup-*/
-upgrade-v7-backup-*/
+upgrade-v${PLUGIN_MM%.*}-backup-*/
 *.bak
-# === /AIPS v7.0 ===
+${END_MARK}
 BLOCK
+)"
 
 if [ "$MODE" = "dry-run" ]; then
   echo "[plan] target excludes file: $EXCLUDES_FILE"
@@ -134,4 +153,4 @@ else
   echo "[ok] AIPS gitignore block installed at $EXCLUDES_FILE"
 fi
 
-echo "[note] Per-project .gitignore may now drop AIPS-specific entries — see /aips:upgrade --to v7.0."
+echo "[note] Per-project .gitignore may now drop AIPS-specific entries — see /aips:upgrade --to v${PLUGIN_MM}."

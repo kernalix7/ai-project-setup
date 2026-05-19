@@ -116,7 +116,7 @@ confirm() {
 cat <<BANNER
 
 ${C_BOLD}${C_CYAN}╔════════════════════════════════════════════════════════════════╗
-║  AIPS v7.0 uninstaller — user-level, no sudo                   ║
+║  AIPS uninstaller — user-level, no sudo                        ║
 ║  Interactive per-category. Defaults to safest (smallest blast) ║
 ╚════════════════════════════════════════════════════════════════╝${C_RESET}
 
@@ -204,14 +204,20 @@ fi
 banner "3. AIPS .gitignore block (global)"
 detail "Path:   $GIT_IGNORE_PATH"
 GI_HAS_BLOCK=0
-if [ -f "$GIT_IGNORE_PATH" ] && grep -q '^# === AIPS v7.0 ===' "$GIT_IGNORE_PATH" 2>/dev/null; then
-  GI_HAS_BLOCK=1
-  detail "Found:  AIPS v7.0 block ($(grep -c '^' "$GIT_IGNORE_PATH") lines total in file)"
+GI_BLOCK_LABEL=""
+if [ -f "$GIT_IGNORE_PATH" ]; then
+  # Match any AIPS vN.N block — version-agnostic.
+  GI_BLOCK_LABEL="$(grep -oE '^# === AIPS v[0-9]+\.[0-9]+( \([a-z]+\))? ===' "$GIT_IGNORE_PATH" 2>/dev/null | head -1)"
+  if [ -n "$GI_BLOCK_LABEL" ]; then
+    GI_HAS_BLOCK=1
+    detail "Found:  $GI_BLOCK_LABEL ($(grep -c '^' "$GIT_IGNORE_PATH") lines total in file)"
+  fi
 fi
 if [ "$PURGE" = "1" ]; then
   if [ "$GI_HAS_BLOCK" = "1" ]; then
-    if confirm "gitignore block" "Strip AIPS v7.0 block from $GIT_IGNORE_PATH"; then
-      do_rm "sed -i.uninstall.bak '/^# === AIPS v7.0 ===\$/,/^# === \\/AIPS v7.0 ===\$/d' '$GIT_IGNORE_PATH'"
+    if confirm "gitignore block" "Strip $GI_BLOCK_LABEL block from $GIT_IGNORE_PATH"; then
+      # Strip any AIPS vN.N block — start marker is GI_BLOCK_LABEL, end is the matching /AIPS vN.N.
+      do_rm "sed -i.uninstall.bak '/^# === AIPS v[0-9]\\+\\.[0-9]\\+\\( ([a-z]\\+)\\)\\? ===\$/,/^# === \\/AIPS v[0-9]\\+\\.[0-9]\\+\\( ([a-z]\\+)\\)\\? ===\$/d' '$GIT_IGNORE_PATH'"
       ok "gitignore block stripped (backup: $GIT_IGNORE_PATH.uninstall.bak)"
     else
       skip "gitignore block kept"
