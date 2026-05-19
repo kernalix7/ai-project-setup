@@ -448,16 +448,78 @@ else
     warn "setup-global-gitignore.sh not found in $LIB_DIR — skipped"
   fi
 
-  # strip per-project AIPS vN.N block (version-agnostic)
+  # Strip AIPS-related lines from per-project .gitignore.
+  # Two passes:
+  #   (a) Version-agnostic marker block: # === AIPS vN.N ... # === /AIPS vN.N
+  #   (b) Raw lines (no marker) — exact-match list of paths/globs that AIPS
+  #       owns. Global ~/.config/git/ignore handles all of these now.
   GI="$PROJECT_ROOT/.gitignore"
   if [ -f "$GI" ]; then
+    BEFORE_LINES=$(wc -l < "$GI" 2>/dev/null || echo 0)
+
+    # (a) marker block
     if grep -qE '^# === AIPS v[0-9]+\.[0-9]+( \([a-z]+\))? ===$' "$GI" 2>/dev/null; then
       if [ "$DRY_RUN" -eq 1 ]; then
-        log "(dry) would strip AIPS vN.N block from $GI"
+        log "(dry) would strip AIPS vN.N marker block from $GI"
       else
         sed -i -E '/^# === AIPS v[0-9]+\.[0-9]+( \([a-z]+\))? ===$/,/^# === \/AIPS v[0-9]+\.[0-9]+( \([a-z]+\))? ===$/d' "$GI"
-        log "gitignore  stripped per-project AIPS block from $GI"
       fi
+    fi
+
+    # (b) raw AIPS lines (anchored exact match). Excludes user `!unignore`
+    # entries (those start with `!`), so any project-level override survives.
+    AIPS_RAW_PATTERNS=(
+      '.priv-storage/'
+      '.priv-storage/.allow-setup-reread'
+      'tmp-igbkp/'
+      '.claude'
+      '.claude/'
+      '.codex/'
+      '.aider*'
+      '.continue/'
+      '.cline/'
+      '.roo/'
+      '.cursor/'
+      '.mcp.json'
+      'CLAUDE.md'
+      'CLAUDE.local.md'
+      'AGENTS.md'
+      '.cursorrules'
+      '.vscode'
+      '.vscode/settings.json'
+      'WORK_STATUS.md'
+      'CLAUDE.md.bak'
+      'AGENTS.md.bak'
+      '.cursorrules.bak'
+      'WORK_STATUS.md.bak'
+      '.gitignore.bak'
+      'uninstall-backup-*/'
+      'migrate-backup-*/'
+      'reset-backup-*/'
+      'upgrade-v7-backup-*/'
+      'upgrade-backup-*/'
+    )
+    if [ "$DRY_RUN" -eq 1 ]; then
+      removed=0
+      for p in "${AIPS_RAW_PATTERNS[@]}"; do
+        grep -qFx "$p" "$GI" 2>/dev/null && removed=$((removed + 1))
+      done
+      log "(dry) would strip $removed raw AIPS lines from $GI"
+    else
+      SED_SCRIPT=""
+      for p in "${AIPS_RAW_PATTERNS[@]}"; do
+        # escape sed regex special chars in the literal pattern
+        esc=$(printf '%s' "$p" | sed 's/[][\/.*^$+?()|{}]/\\&/g')
+        SED_SCRIPT="${SED_SCRIPT};/^${esc}$/d"
+      done
+      # collapse trailing blank lines from deletions while preserving spacing
+      sed -i -e "$SED_SCRIPT" "$GI"
+    fi
+
+    AFTER_LINES=$(wc -l < "$GI" 2>/dev/null || echo 0)
+    REMOVED=$((BEFORE_LINES - AFTER_LINES))
+    if [ "$REMOVED" -gt 0 ]; then
+      log "gitignore  stripped $REMOVED AIPS lines from $GI (global ~/.config/git/ignore now handles them)"
     fi
   fi
 fi
