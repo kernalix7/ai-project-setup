@@ -1,0 +1,19 @@
+# === AIPS v6.0 ===
+.priv-storage/
+tmp-igbkp/
+.claude/
+.codex/
+.aider*
+.continue/
+.cline/
+.roo/
+.mcp.json
+CLAUDE.local.md
+AGENTS.md
+.cursorrules
+.vscode/settings.json
+uninstall-backup-*/
+migrate-backup-*/
+reset-backup-*/
+*.bak
+# === /AIPS v6.0 ===

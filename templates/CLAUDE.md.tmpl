@@ -1,0 +1,112 @@
+# {{PROJECT_NAME}}
+
+<!--
+AIPS v6.0 PROJECT CLAUDE.md
+Sections 8/9/10/12/13 (AI Config Storage, Work Status Tracking, Memory,
+Resilience, Token Efficiency) are globalized — see ~/.claude/CLAUDE.md.
+Only Sections 1-7 + 11 live here per project.
+-->
+
+## 1. Project Identity
+
+- **Name**: {{PROJECT_NAME}}
+- **License**: {{LICENSE}}
+- **Language**: {{LANG}}
+- **Framework**: {{FRAMEWORK}}
+- **Architecture**: {{ARCHITECTURE}}
+- **Target Platform**: {{TARGET_PLATFORM}}
+- **Deployment**: {{DEPLOYMENT}}
+
+## 2. Core Design Goals
+
+1. {{DESIGN_GOAL_1}}
+2. {{DESIGN_GOAL_2}}
+3. {{DESIGN_GOAL_3}}
+4. (add more as the project clarifies)
+
+## 3. Project Structure
+
+```
+{{PROJECT_NAME}}/
+├── {{ENTRY_POINT}}
+├── src/
+├── tests/
+├── docs/
+├── README.md
+└── (see lib/render-claude-md.sh for auto-detected tree)
+```
+
+## 4. Coding Conventions
+
+### General
+
+- Follow {{LANG}} community style guides ({{STYLE_GUIDE}}).
+- Keep functions small and single-purpose; prefer pure functions where practical.
+- Comments explain *why*, not *what*.
+
+### {{FRAMEWORK}}-specific
+
+- {{FRAMEWORK_CONVENTION_1}}
+- {{FRAMEWORK_CONVENTION_2}}
+
+### Formatting / Linting
+
+- Formatter: {{FORMATTER}}
+- Linter: {{LINTER}}
+- Run before commit: `{{FORMAT_CMD}} && {{LINT_CMD}}`
+
+## 5. Build & Verification
+
+```bash
+# Install deps
+{{INSTALL_CMD}}
+
+# Build
+{{BUILD_CMD}}
+
+# Test
+{{TEST_CMD}}
+
+# Lint + format check
+{{LINT_CMD}}
+{{FORMAT_CMD}} --check
+
+# Pre-commit checklist:
+# 1. Tests pass
+# 2. Lint clean
+# 3. No AI attribution in commit message (see ~/.claude/CLAUDE.md)
+# 4. CHANGELOG entry added if user-facing
+```
+
+## 6. Dependencies Policy
+
+- Package manager: {{PACKAGE_MANAGER}}
+- Add new deps via `{{ADD_DEP_CMD}}` (locks versions).
+- Vet new deps for: license compatibility ({{LICENSE}}), maintenance status, security advisories.
+- Pin versions in lockfile; do not commit floating ranges for prod deps.
+
+## 7. Git Workflow
+
+- **Branch naming**: `feature/<short-name>`, `fix/<short-name>`, `chore/<short-name>`.
+- **Commit convention**: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`.
+- **Merge strategy**: {{MERGE_STRATEGY}} (e.g. squash-merge PRs to `main`).
+- **CI**: {{CI_DESCRIPTION}}.
+- **NO AI attribution** in commits/PRs — hard user rule, see `~/.claude/CLAUDE.md`. Never add `Co-Authored-By: Claude` or `Generated with Claude Code`.
+
+## 11. Agent Teams
+
+Form teams for cross-cutting changes; single-agent for narrow edits.
+
+| Team | Agent ID | Owned Paths | Domain | Model | Effort |
+|------|----------|-------------|--------|-------|--------|
+| tech-lead | `tech-lead` | All | orchestration, planning | opus | max |
+| {{TEAM_1_NAME}} | `{{TEAM_1_ID}}` | `{{TEAM_1_PATHS}}` | {{TEAM_1_DOMAIN}} | {{TEAM_1_MODEL}} | {{TEAM_1_EFFORT}} |
+| {{TEAM_2_NAME}} | `{{TEAM_2_ID}}` | `{{TEAM_2_PATHS}}` | {{TEAM_2_DOMAIN}} | {{TEAM_2_MODEL}} | {{TEAM_2_EFFORT}} |
+| security | `security-team` | All | review secrets, auth, encryption | opus | max |
+
+Spawn a team when:
+- Change spans >3 files across distinct domains.
+- Security-sensitive code is touched (auth, crypto, secrets, network boundaries).
+- Major version bump (breaking changes).
+
+Otherwise the main agent works solo with `explorer` / `code-reviewer` as needed.

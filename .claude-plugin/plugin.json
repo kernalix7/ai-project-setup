@@ -1,0 +1,13 @@
+{
+  "name": "AIPS",
+  "version": "6.0.0-dev",
+  "description": "Universal AI-coding-tool bootstrap. Claude Code primary. One curl, one /aips:init.",
+  "author": { "name": "Kim DaeHyun", "url": "https://github.com/kernalix7" },
+  "license": "MIT",
+  "homepage": "https://github.com/kernalix7/AIPS",
+  "repository": "https://github.com/kernalix7/AIPS",
+  "commands": ["./commands/"],
+  "hooks": "./hooks/hooks.json",
+  "agents": ["./agents/"],
+  "skills": ["./skills/"]
+}

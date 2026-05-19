@@ -1,0 +1,11 @@
+{
+  "name": "AIPS",
+  "owner": { "name": "Kim DaeHyun", "url": "https://github.com/kernalix7" },
+  "plugins": [
+    {
+      "name": "AIPS",
+      "source": "./",
+      "description": "Universal AI-coding-tool bootstrap plugin."
+    }
+  ]
+}
